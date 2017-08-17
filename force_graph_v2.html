@@ -1,0 +1,35 @@
+<html>
+
+<head>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <!--script src="https://d3js.org/d3.v4.min.js"></script-->
+    <style>
+        svg circle {
+            fill: black;
+            stroke: gray;
+            stroke-width: 3;
+
+        }
+        svg line {
+            stroke: blue;
+            stroke-width: 1;
+            pointer-events: none;
+        }
+        svg text {
+            fill: red;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id='app'>
+        <h1>D3 Force-Directed Graph v3</h1>
+    </div>
+    <!--button id="btnRandom">Randomize</button-->
+
+    <script src="./src/utilities.js"></script>
+    <script src="./src/force_graph_v3.js"></script>
+</body>
+
+</html>
