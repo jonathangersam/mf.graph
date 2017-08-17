@@ -1,0 +1,18 @@
+{
+  "graph": [],
+  "links": [
+    {"source": 0, "target": 1, "label": "husband to" },
+    {"source": 0, "target": 2, "label": "owner of" },
+    {"source": 0, "target": 3, "label": "owner of" },
+    {"source": 1, "target": 0, "label": "wife to" },
+    {"source": 1, "target": 2, "label": "noona of" },
+    {"source": 2, "target": 3, "label": "besties" }
+  ],
+  "nodes": [
+    {"id": "Jon", "type": "square"},
+    {"id": "Gretch", "type": "square"},
+    {"id": "Patty", "type": "circle"},
+    {"id": "Scrappy", "type": "circle"}
+  ],
+  "directed": false
+}

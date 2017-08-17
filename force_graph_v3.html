@@ -16,20 +16,28 @@
 <body>
 <script src="http://d3js.org/d3.v3.min.js"></script>
 <script>
+    const INPUT_PATH = "graph.json";
+    //const INPUT_PATH = "graph2.json";
+
     let w = window.innerWidth;
     let h = window.innerHeight;
 
     //create SVG area
     const svg = d3.select("body").append("svg");
     svg.style("cursor","move");
-
     const chartArea = svg.append("g");
 
+    //load data
+    d3.json(INPUT_PATH, (e, data) => {
+        genGraph(data);
+    });
+
+
     //MAIN
-    function genGraph(e, graph){
+    function genGraph(data){
         //vars
         const ALIGN_TEXT_CENTER = true;
-        const SHOW_OUTLINE = false;
+        const DRAW_SOLID_NODES = true;
 
         const ZOOM_MIN = 0.1;
         const ZOOM_MAX = 7;
@@ -52,8 +60,10 @@
         const STROKE_WIDTH_MIN = 1.5;
         const STROKE_WIDTH_MAX = 4.5;
 
-
         //computed vars
+        const TO_COLOR = DRAW_SOLID_NODES ? "fill" : "stroke";
+        const TO_WHITE = DRAW_SOLID_NODES ? "stroke" : "fill";
+
         const SIZE_SCALE = d3.scale.pow().exponent(1)
             .domain([1,100])
             .range([8,24]);
@@ -64,7 +74,7 @@
 
         const zoom = d3.behavior.zoom().scaleExtent([ZOOM_MIN,ZOOM_MAX]);
 
-        //dynamic objects/vars
+        //dynamic vars
         var linkedByIndex = {};
         let focus_node = null;
         let highlight_node = null;
@@ -84,23 +94,9 @@
             isKey0 = true;
 
         /* START PROCESS */
-        graph.links.forEach(function(d) {
+        data.links.forEach(function(d) {
             linkedByIndex[d.source + "," + d.target] = true;
         });
-
-        function isConnected(a, b) {
-            return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index === b.index;
-        }
-
-        function hasConnections(a) {
-            for (property in linkedByIndex) {
-                s = property.split(",");
-                if ((s[0] === a.index || s[1] === a.index) && linkedByIndex[property]) {
-                    return true;
-                }
-            }
-            return false;
-        }
 
         const force = d3.layout.force()
             .linkDistance(60)
@@ -108,12 +104,13 @@
             .size([w,h]);
 
         force
-            .nodes(graph.nodes)
-            .links(graph.links)
+            .nodes(data.nodes)
+            .links(data.links)
             .start();
 
+        //create EDGE LINES
         const link = chartArea.selectAll(".link")
-            .data(graph.links)
+            .data(data.links)
             .enter().append("line")
             .attr("class", "link")
             .style("stroke-width",STROKE_WIDTH_MIN)
@@ -121,61 +118,55 @@
                 if (isNumber(d.score) && d.score>=0) return COLOR_SCALE(d.score);
                 else return LINK_COLOR_DEFAULT; })
 
-
-        const node = chartArea.selectAll(".node")
-            .data(graph.nodes)
+        //create NODE/VERTICES
+        const nodes = chartArea.selectAll(".node")
+            .data(data.nodes)
             .enter().append("g")
             .attr("class", "node")
             .call(force.drag);
 
-        node.on("dblclick.zoom", function(d) { d3.event.stopPropagation();
+        nodes.on("dblclick.zoom", function(d) { d3.event.stopPropagation();
             const dcx = (window.innerWidth/2-d.x * zoom.scale());
             const dcy = (window.innerHeight/2-d.y * zoom.scale());
             zoom.translate([dcx,dcy]);
             chartArea.attr("transform", "translate("+ dcx + "," + dcy  + ")scale(" + zoom.scale() + ")");
         });
 
-
-
-
-        let tocolor = "fill";
-        let towhite = "stroke";
-
-        if (SHOW_OUTLINE) {
-            tocolor = "stroke";
-            towhite = "fill";
-        }
-
         //add circles
-        const circle = node.append("path")
+        const circle = nodes.append("path")
             .attr("d", d3.svg.symbol()
                 .size(function(d) { return Math.PI*Math.pow(SIZE_SCALE(d.size)||BASE_NODE_SIZE_MIN,2); })
                 .type(function(d) { return d.type; }))
 
-            .style(tocolor, function(d) {
+            .style(TO_COLOR, function(d) {
                 if (isNumber(d.score) && d.score>=0) return COLOR_SCALE(d.score);
                 else return BASE_NODE_COLOR_DEFAULT; })
             //.attr("r", function(d) { return size(d.size)||nominal_base_node_size; })
             .style("stroke-width", STROKE_WIDTH_MIN)
-            .style(towhite, "white");
+            .style(TO_WHITE, "white");
 
         //add labels
-        const text = chartArea.selectAll(".text")
-            .data(graph.nodes)
+        const nodeLabels = chartArea.selectAll(".text")
+            .data(data.nodes)
             .enter().append("text")
             .attr("dy", ".35em")
-            .style("font-size", TEXT_SIZE_MIN + "px")
+            .style("font-size", TEXT_SIZE_MIN + "px");
 
-        //format label alignment
-        if (ALIGN_TEXT_CENTER)
-            text.text(function(d) { return d.id; })
+        if (ALIGN_TEXT_CENTER) {
+            nodeLabels.text(function(d) { return d.id; })
                 .style("text-anchor", "middle");
-        else
-            text.attr("dx", function(d) {return (SIZE_SCALE(d.size)||BASE_NODE_SIZE_MIN);})
-                .text(function(d) { return '\u2002'+d.id; });
+        }
+        else {
+            nodeLabels.attr("dx", function(d) {
+                return (SIZE_SCALE(d.size) || BASE_NODE_SIZE_MIN);
+            })
+                .text(function(d) {
+                    return '\u2002'+d.id;
+                });
+        }
 
         //apply mouseover highlighting
-        node.on("mouseover", function(d) {
+        nodes.on("mouseover", function(d) {
                 set_highlight(d);
             })
             .on("mousedown", function(d) {
@@ -198,7 +189,7 @@
                     if (HIGHLIGHT_OPACITY < 1)
                     {
                         circle.style("opacity", 1);
-                        text.style("opacity", 1);
+                        nodeLabels.style("opacity", 1);
                         link.style("opacity", 1);
                     }
                 }
@@ -207,75 +198,6 @@
                     exit_highlight();
                 }
             });
-
-        function exit_highlight()
-        {
-            highlight_node = null;
-
-            if (focus_node === null)
-            {
-                svg.style("cursor","move");
-                if (HIGHLIGHT_COLOR!=="white")
-                {
-                    circle.style(towhite, "white");
-                    text.style("font-weight", "normal");
-                    link.style("stroke", function(o) {
-                        return (isNumber(o.score) && o.score >= 0) ? COLOR_SCALE(o.score) : LINK_COLOR_DEFAULT;
-                    });
-                }
-
-            }
-        }
-
-        function set_focus(d)
-        {
-            if (HIGHLIGHT_OPACITY < 1)  {
-                circle.style("opacity", function(o) {
-                    return isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY;
-                });
-
-                text.style("opacity", function(o) {
-                    return isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY;
-                });
-
-                link.style("opacity", function(o) {
-                    return o.source.index === d.index || o.target.index === d.index ? 1 : HIGHLIGHT_OPACITY;
-                });
-            }
-        }
-
-        function set_highlight(d)
-        {
-            svg.style("cursor","pointer");
-
-            if (focus_node!==null) {
-                d = focus_node;
-            }
-
-            highlight_node = d;
-
-            if (HIGHLIGHT_COLOR!=="white")
-            {
-                circle.style(towhite, function(o) {
-                    return isConnected(d, o) ? HIGHLIGHT_COLOR : "white";});
-
-                text.style("font-weight", function(o) {
-                    return isConnected(d, o) ? "bold" : "normal";});
-
-                link.style("stroke", function(o) {
-                    if (o.source.index === d.index || o.target.index === d.index) {
-                        return HIGHLIGHT_COLOR;
-                    }
-
-                    if (isNumber(o.score) && o.score >= 0) {
-                        return COLOR_SCALE(o.score);
-                    }
-
-                    return LINK_COLOR_DEFAULT;
-                });
-            }
-        }
-
 
         zoom.on("zoom", function() {
             let stroke = STROKE_WIDTH_MIN;
@@ -297,7 +219,7 @@
                 .type(function(d) { return d.type; }));
 
             if (!ALIGN_TEXT_CENTER) {
-                text.attr("dx", function(d) {
+                nodeLabels.attr("dx", function(d) {
                     return (SIZE_SCALE(d.size)*base_radius/BASE_NODE_SIZE_MIN||base_radius);
                 });
             }
@@ -308,7 +230,7 @@
                 text_size = TEXT_SIZE_MAX/zoom.scale();
             }
 
-            text.style("font-size",text_size + "px");
+            nodeLabels.style("font-size",text_size + "px");
 
             chartArea.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
         });
@@ -323,11 +245,11 @@
 
         //set simulation effects
         force.on("tick", function() {
-            node.attr("transform", function(d) {
+            nodes.attr("transform", function(d) {
                     return "translate(" + d.x + "," + d.y + ")";
                 });
 
-            text.attr("transform", function(d) {
+            nodeLabels.attr("transform", function(d) {
                     return "translate(" + d.x + "," + d.y + ")";
                 });
 
@@ -336,9 +258,90 @@
                 .attr("x2", function(d) { return d.target.x; })
                 .attr("y2", function(d) { return d.target.y; });
 
-            node.attr("cx", function(d) { return d.x; })
+            nodes.attr("cx", function(d) { return d.x; })
                 .attr("cy", function(d) { return d.y; });
         });
+
+        /* UTILITY FUNCTIONS */
+        function isConnected(a, b) {
+            return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index === b.index;
+        }
+
+        function hasConnections(a) {
+            for (property in linkedByIndex) {
+                s = property.split(",");
+                if ((s[0] === a.index || s[1] === a.index) && linkedByIndex[property]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function exit_highlight()
+        {
+            highlight_node = null;
+
+            if (focus_node === null)
+            {
+                svg.style("cursor","move");
+                if (HIGHLIGHT_COLOR!=="white")
+                {
+                    circle.style(TO_WHITE, "white");
+                    nodeLabels.style("font-weight", "normal");
+                    link.style("stroke", function(o) {
+                        return (isNumber(o.score) && o.score >= 0) ? COLOR_SCALE(o.score) : LINK_COLOR_DEFAULT;
+                    });
+                }
+
+            }
+        }
+
+        function set_focus(d)
+        {
+            if (HIGHLIGHT_OPACITY < 1)  {
+                circle.style("opacity", function(o) {
+                    return isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY;
+                });
+
+                nodeLabels.style("opacity", function(o) {
+                    return isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY;
+                });
+
+                link.style("opacity", function(o) {
+                    return o.source.index === d.index || o.target.index === d.index ? 1 : HIGHLIGHT_OPACITY;
+                });
+            }
+        }
+
+        function set_highlight(d) {
+            svg.style("cursor","pointer");
+
+            if (focus_node!==null) {
+                d = focus_node;
+            }
+
+            highlight_node = d;
+
+            if (HIGHLIGHT_COLOR !== "white") {
+                circle.style(TO_WHITE, function(o) {
+                    return isConnected(d, o) ? HIGHLIGHT_COLOR : "white";});
+
+                nodeLabels.style("font-weight", function(o) {
+                    return isConnected(d, o) ? "bold" : "normal";});
+
+                link.style("stroke", function(o) {
+                    if (o.source.index === d.index || o.target.index === d.index) {
+                        return HIGHLIGHT_COLOR;
+                    }
+
+                    if (isNumber(o.score) && o.score >= 0) {
+                        return COLOR_SCALE(o.score);
+                    }
+
+                    return LINK_COLOR_DEFAULT;
+                });
+            }
+        }
 
         function resize() {
             const width = window.innerWidth;
@@ -353,13 +356,12 @@
             h = height;
         }
 
-        //apply keystroke effects
+        /* KEYSTROKE FX */
         function keydown() {
             if (d3.event.keyCode === 32) {
                 force.stop();
             }
-            else if (d3.event.keyCode >= 48 && d3.event.keyCode <= 90 && !d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey)
-            {
+            else if (d3.event.keyCode >= 48 && d3.event.keyCode <= 90 && !d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey) {
                 switch (String.fromCharCode(d3.event.keyCode)) {
                     case "C": isKeyC = !isKeyC; break;
                     case "S": isKeyS = !isKeyS; break;
@@ -382,7 +384,7 @@
                         return flag ? "inline" : "none";
                     });
 
-                node.style("display", function(d) {
+                nodes.style("display", function(d) {
                         if ((isKey0 || hasConnections(d)) && vis_by_type(d.type) && vis_by_node_score(d.score)) {
                             return "inline";
                         }
@@ -390,7 +392,7 @@
                         return "none";
                     });
 
-                text.style("display", function(d) {
+                nodeLabels.style("display", function(d) {
                         if ((isKey0||hasConnections(d))&&vis_by_type(d.type)&&vis_by_node_score(d.score)) {
                             return "inline";
                         }
@@ -456,10 +458,5 @@
         }
     }
     //END OF MAIN
-
-    //load data
-    d3.json("graph.json", genGraph);
-
-
 
 </script>
