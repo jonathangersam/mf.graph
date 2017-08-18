@@ -1,0 +1,6 @@
+source,edgelabel,target
+Jon,loves,Greta
+Jon,pets,Scrappy
+Greta,Is Noona of,Patty
+Jon,Kicks,Patty
+Patty,Is Besties With,Scrappy
