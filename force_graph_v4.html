@@ -14,6 +14,7 @@
 </style>
 <body>
 <script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/d3-selection-multi.v1.js"></script>
 <script>
     /* EMBEDS the graph.JSON file into the script because of work laptop firewall issues */
     /* Making the EDGE LABELS work */
@@ -63,6 +64,8 @@
     //MAIN
     function genGraph(data){
         //vars
+        const LINK_DISTANCE = 100;
+
         const ALIGN_TEXT_CENTER = true;
         const DRAW_SOLID_NODES = true;
 
@@ -126,7 +129,7 @@
         });
 
         const force = d3.layout.force()
-            .linkDistance(60)
+            .linkDistance(LINK_DISTANCE)
             .charge(-300)
             .size([w,h]);
 
@@ -135,46 +138,50 @@
             .links(data.links)
             .start();
 
-        /* EDGES as LINES */
-        const edges = chartArea.selectAll(".edge")
+        /* EDGES as PATHS */
+        const edgePaths = chartArea.selectAll(".edgepath")
             .data(data.links)
             .enter()
-            .append("line")
-            .attr("class", "edge")
+            .append('path')
+            .attr('class', 'edgepath')
             .style("stroke-width",STROKE_WIDTH_MIN)
-            .style("stroke", d => (isNumber(d.score) && d.score>=0) ? COLOR_SCALE(d.score) :  LINK_COLOR_DEFAULT);
+            .style("stroke", d => (isNumber(d.score) && d.score>=0) ? COLOR_SCALE(d.score) :  LINK_COLOR_DEFAULT)
+            .attr('id', (d,i) => 'edgepath' + i)
+            .attr('marker-end', 'url(#arrowhead)')
+            .style("pointer-events", "none");
 
-//        const edges = svg.selectAll(".edge")
-//            .data(data.links)
-//            .enter()
-//            .append('path')
-//            .attr('d', function(d) {return 'M '+d.source.x+' '+d.source.y+' L '+ d.target.x +' '+d.target.y})
-//            .attr('class', 'edge')
-//            .style('fill-opacity', 0)
-//            .style('stroke-opacity', 0)
-//            .style('fill', 'blue')
-//            .style("stroke-width",STROKE_WIDTH_MIN)
-//            //.style("stroke", d => (isNumber(d.score) && d.score>=0) ? COLOR_SCALE(d.score) :  LINK_COLOR_DEFAULT);
-//            .style('stroke', 'red') //TEMP
-//            .attr('id', function(d,i) {return 'edgepath'+i})
-//            .style("pointer-events", "none");
+        const edgeLabels = chartArea.selectAll(".edgelabel")
+            .data(data.links)
+            .enter()
+            .append("text")
+            .style("pointer-events", "none")
+            .attr('class', 'edgelabel')
+            .attr('id', (d, i) => 'edgelabel' + i)
+            .style('font-size', TEXT_SIZE_MIN + "px")
+            .style('fill', '#aaa');
 
-//        const edgelabels = svg.selectAll(".edgelabel")
-//            .data(data.links)
-//            .enter()
-//            .append("text")
-//            .style("pointer-events", "none")
-//            .attr('class', 'edgelabel')
-//            .attr('id', function(d, i) {return 'edgelabel' + i})
-//            .attr('dx', 80)
-//            .attr('dy', 0)
-//            .style('font-size', 10)
-//            .style('fill', '#aaa');
-//
-//        edgelabels.append('textPath')
-//            .attr('xlink:href', function(d,i) {return '#edgepath'+i})
-//            .style("pointer-events", "none")
-//            .text(function(d,i) {return 'label '+i});
+        edgeLabels.append('textPath')
+            .attr('xlink:href', (d,i) => '#edgepath' + i)
+            .style("text-anchor", "middle")
+            .style("pointer-events", "none")
+            .attr("startOffset", "50%")
+            //.text((d,i) => 'label ' + i);
+            .text(d => d.label);
+
+        chartArea.append('defs')
+            .append('marker')
+            .attrs({'id':'arrowhead',
+                'viewBox':'-0 -5 10 10',
+                'refX':20, //offset from edge. takes node shape into account
+                'refY':0,
+                'orient':'auto',
+                'markerWidth':7,
+                'markerHeight':7,
+                'xoverflow':'visible'})
+            .append('svg:path')
+            .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+            .attr('fill', '#999')
+            .style('stroke','none');
 
 
         /* NODES/VERTICES as shapes*/
@@ -256,7 +263,7 @@
                     if (HIGHLIGHT_OPACITY < 1) {
                         nodePaths.style("opacity", 1);
                         nodeLabels.style("opacity", 1);
-                        edges.style("opacity", 1);
+                        edgePaths.style("opacity", 1);
                     }
                 }
 
@@ -269,7 +276,7 @@
         //set size of elements
         zoom.on("zoom", function() {
             const strokeWidth = (STROKE_WIDTH_MIN * zoom.scale() > STROKE_WIDTH_MAX) ? STROKE_WIDTH_MAX / zoom.scale() : STROKE_WIDTH_MIN;
-            edges.style("stroke-width",strokeWidth);
+            edgePaths.style("stroke-width",strokeWidth);
             nodePaths.style("stroke-width",strokeWidth);
 
             const base_radius = (BASE_NODE_SIZE_MIN * zoom.scale() > BASE_NODE_SIZE_MAX) ? BASE_NODE_SIZE_MAX / zoom.scale() : BASE_NODE_SIZE_MIN;
@@ -303,26 +310,19 @@
 
             nodeLabels.attr("transform", d => "translate(" + d.x + "," + d.y + ")");
 
-            edges.attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+            edgePaths.attr('d', d => 'M ' + d.source.x + ' ' + d.source.y + ' L ' + d.target.x + ' ' + d.target.y);
 
-//            edgepaths.attr('d', function(d) { var path='M '+d.source.x+' '+d.source.y+' L '+ d.target.x +' '+d.target.y;
-//                //console.log(d)
-//                return path});
-//
-//            edgelabels.attr('transform',function(d,i){
-//                if (d.target.x<d.source.x){
-//                    bbox = this.getBBox();
-//                    rx = bbox.x+bbox.width/2;
-//                    ry = bbox.y+bbox.height/2;
-//                    return 'rotate(180 '+rx+' '+ry+')';
-//                }
-//                else {
-//                    return 'rotate(0)';
-//                }
-//            });
+            edgeLabels.attr('transform', function(d){
+                if (d.target.x < d.source.x){
+                    const bbox = this.getBBox();
+                    const rx = bbox.x + bbox.width / 2;
+                    const ry = bbox.y + bbox.height / 2;
+                    return 'rotate(180 ' + rx + ' ' + ry + ')';
+                }
+                else {
+                    return 'rotate(0)';
+                }
+            });
 
         });
 
@@ -350,7 +350,7 @@
                 if (HIGHLIGHT_COLOR !== "white") {
                     nodePaths.style(TO_WHITE, "white");
                     nodeLabels.style("font-weight", "normal");
-                    edges.style("stroke", o => (isNumber(o.score) && o.score >= 0) ? COLOR_SCALE(o.score) : LINK_COLOR_DEFAULT);
+                    edgePaths.style("stroke", o => (isNumber(o.score) && o.score >= 0) ? COLOR_SCALE(o.score) : LINK_COLOR_DEFAULT);
                 }
             }
         }
@@ -359,7 +359,7 @@
             if (HIGHLIGHT_OPACITY < 1)  {
                 nodePaths.style("opacity", o => isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY);
                 nodeLabels.style("opacity", o => isConnected(d, o) ? 1 : HIGHLIGHT_OPACITY);
-                edges.style("opacity", o => (o.source.index === d.index || o.target.index === d.index) ? 1 : HIGHLIGHT_OPACITY);
+                edgePaths.style("opacity", o => (o.source.index === d.index || o.target.index === d.index) ? 1 : HIGHLIGHT_OPACITY);
             }
         }
 
@@ -375,7 +375,7 @@
             if (HIGHLIGHT_COLOR !== "white") {
                 nodePaths.style(TO_WHITE, o => isConnected(d, o) ? HIGHLIGHT_COLOR : "white");
                 nodeLabels.style("font-weight", o => isConnected(d, o) ? "bold" : "normal");
-                edges.style("stroke", function(o) {
+                edgePaths.style("stroke", function(o) {
                     if (o.source.index === d.index || o.target.index === d.index) {
                         return HIGHLIGHT_COLOR;
                     }
@@ -426,7 +426,7 @@
                     case "0": isKey0 = !isKey0; break;
                 }
 
-                edges.style("display", function(d) {
+                edgePaths.style("display", function(d) {
                         const shouldDisplay = shouldShowShape(d.source.type) && shouldShowShape(d.target.type) && shouldShowNodeScore(d.source.score)&&shouldShowNodeScore(d.target.score) && shouldShowEdgeScore(d.score);
                         linkedByIndex[d.source.index + "," + d.target.index] = shouldDisplay;
                         return shouldDisplay ? "inline" : "none";
