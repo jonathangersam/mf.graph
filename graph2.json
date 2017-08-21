@@ -1,6 +1,6 @@
 {
   "graph": [],
-  "links": [
+  "edges": [
     {"source": 0, "target": 1, "label": "husband to" },
     {"source": 0, "target": 2, "label": "owner of" },
     {"source": 0, "target": 3, "label": "owner of" },

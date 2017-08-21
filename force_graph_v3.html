@@ -94,7 +94,7 @@
             isKey0 = true;
 
         /* START PROCESS */
-        data.links.forEach(function(d) {
+        data.edges.forEach(function(d) {
             linkedByIndex[d.source + "," + d.target] = true;
         });
 
@@ -105,12 +105,12 @@
 
         force
             .nodes(data.nodes)
-            .links(data.links)
+            .edges(data.edges)
             .start();
 
         //create EDGE LINES
         const link = chartArea.selectAll(".link")
-            .data(data.links)
+            .data(data.edges)
             .enter().append("line")
             .attr("class", "link")
             .style("stroke-width",STROKE_WIDTH_MIN)
