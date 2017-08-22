@@ -1,5 +1,7 @@
-const INPUT_PATH = "./tmp/regional.csv";
-const OUTPUT_PATH = "./tmp/regional.json";
+//const INPUT_PATH = "./tmp/regional.csv";
+//const OUTPUT_PATH = "./tmp/regional.json";
+const INPUT_PATH = "./tmp/tzsr.csv";
+const OUTPUT_PATH = "./tmp/tzsr.json";
 
 
 /* BOOTSTRAP */
