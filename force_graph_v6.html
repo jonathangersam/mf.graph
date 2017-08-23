@@ -11,8 +11,68 @@
         pointer-events: none;
     }
 
+    .node {
+        fill: #40a2e5;
+        /* stroke-width: none; */
+    }
+    .node.focused {
+        fill: red;
+    }
+
+    .nodelabel {
+        fill: black;
+        font-size: 7px;
+        font-weight: normal;
+    }
+    .nodelabel.focused {
+        font-weight: bold;
+    }
+
+
+    .edge {
+        stroke: #c6c6c6;
+        stroke-width: 1.5;
+    }
+    .edge.focused {
+        stroke: red;
+    }
+
+    .edgelabel {
+        fill: #c6c6c6;
+        font-size: 6px;
+        font-weight: normal;
+    }
+    .edgelabel.focused {
+        fill: red;
+        font-weight: bold;
+    }
+
+    .unfocused {
+        opacity: 0.2
+    }
+
+    text.unfocused {
+        opacity: 0;
+    }
+
+    #arrowheadneutral {
+        fill: #c6c6c6;
+        stroke: none;
+    }
+    #arrowheadfocused {
+        fill: red;
+        stroke: none;
+    }
+    #arrowheadunfocused {
+        fill: #ceedf9;
+        stroke: none;
+    }
+
 </style>
 <body>
+    <div class="focused">
+        <h4>Project Saturn</h4>
+    </div>
 <script src="http://d3js.org/d3.v4.min.js"></script>
 <script src="http://d3js.org/d3-selection-multi.v1.js"></script>
 <script>
@@ -79,9 +139,10 @@
 
     /*
     TODOS
-    - defocused nodelabels should not render
-    - defocused nodes should be transparent instead of just low-saturation
-    - defocused edgePaths should be transparent instead of just low-saturation
+    / move styling from JS to CSS
+    / defocused nodelabels should not render
+    / defocused nodes should be transparent instead of just low-saturation
+    / defocused edgePaths should be transparent instead of just low-saturation
     - right click on a node and it should fix focus (node itself and connected edges)
     - index.js CSV to JSON converter: foreach edge: if node-target combo is present already, update existing's edge by concatenating the new edge.
     / make nodes collide like solid disks
@@ -89,60 +150,63 @@
 
     //MAIN
     function genGraph(data){
-        //vanity switches
+        //switches
         const EDGELABEL_KEEP_UPRIGHT = false;
-        const LINK_DISTANCE = 100;
         const SHOW_EDGES = true;
         const SHOW_EDGE_ARROWHEADS = true;
         const RENDER_FRAMES_TO_SKIP = 2;
-        const GRAPH_CHARGE = -100;
         const POSTDRAG_EASING = true;
         const NODE_COLLISION_PADDING = 1;
-        const NODE_RADIUS = 20;
 
-        //vars
+        //sim settings
+        const LINK_DISTANCE = 100;
+        const GRAPH_CHARGE = -100;
+        const NODE_RADIUS = 20;
+        const EDGE_ARROWHEAD_OFFSET = 30; //distance from tip of an edge. adjust based on node radius
+
+        //special classnames
         const classNameFocused = "focused";
         const classNameUnfocused = "unfocused";
         const classNameLocked = "locked";
 
-        const HIGHLIGHT_COLOR = "red";
+        const idArrowheadNeutral = 'arrowheadneutral';
+        const idArrowheadFocused = 'arrowheadfocused';
+        const idArrowheadUnfocused = 'arrowheadunfocused';
 
-        const NODE_COLOR_DEFAULT = "#40a2e5";
-        const NODE_COLOR_UNFOCUSED = "#ceedf9";
+        /* SETUP SIMULATION */
 
-        const NODELABEL_COLOR_DEFAULT = "black";
-        const NODELABEL_COLOR_UNFOCUSED = "#d4d4d4";
-        const NODELABEL_TEXTSIZE = 7;
-
-        const EDGE_COLOR_DEFAULT = "#c6c6c6";
-        const EDGE_COLOR_UNFOCUSED = "#efefef";
-        const EDGE_STROKEWIDTH = 1.5;
-
-        const EDGELABEL_TEXTSIZE = NODELABEL_TEXTSIZE * 0.9;
-
-        /* START PROCESS */
+        //build list of linked nodes
         let linkedByIndex = {};
 
         data.edges.forEach(function(d) {
             linkedByIndex[d.source + "," + d.target] = true;
         });
 
-        /* SETUP SIMULATION AND ADD FORCES */
+        //Setup simulation Forces
         const simulation = d3.forceSimulation()
             .force("link", d3.forceLink().distance(LINK_DISTANCE))
             .force("collide", d3.forceCollide().radius(() => NODE_RADIUS + NODE_COLLISION_PADDING).iterations(2))
             .force("charge", d3.forceManyBody().strength(GRAPH_CHARGE))
             .force("center", d3.forceCenter(w / 2, h / 2)); //todo: convert to +svg.attr("width"), +svg.attr("width")
 
-        /* Draw Paths for the EDGES */
-        const edgePaths = chartArea.selectAll(".edgepath")
+        const optimizer = new Optimizer(RENDER_FRAMES_TO_SKIP);
+
+        simulation
+            .nodes(data.nodes)
+            .on("tick", ticked);
+
+        simulation.force("link")
+            .links(data.edges);
+
+        /* DRAW NODES AND EDGES */
+
+        //Draw Paths for the Edges
+        const edges = chartArea.selectAll(".edge")
             .data(data.edges)
             .enter()
             .append('path')
-            .attr('class', 'edgepath')
-            .style("stroke-width",EDGE_STROKEWIDTH)
-            .style("stroke", EDGE_COLOR_DEFAULT)
-            .attr('id', (d,i) => 'edgepath' + i)
+            .attr('class', 'edge')
+            .attr('id', (d,i) => 'edge' + i)
             .style("pointer-events", "none");
 
         const edgeLabels = chartArea.selectAll(".edgelabel")
@@ -151,31 +215,25 @@
             .append("text")
             .style("pointer-events", "none")
             .attr('class', 'edgelabel')
-            .attr('id', (d, i) => 'edgelabel' + i)
-            .style('font-size', EDGELABEL_TEXTSIZE + "px")
-            .style('fill', EDGE_COLOR_DEFAULT);
+            .attr('id', (d, i) => 'edgelabel' + i);
 
         edgeLabels.append('textPath')
-            .attr('xlink:href', (d,i) => '#edgepath' + i)
+            .attr('xlink:href', (d,i) => '#edge' + i)
             .style("text-anchor", "middle")
             .style("pointer-events", "none")
             .attr("startOffset", "50%")
             .text(d => d.label);
 
-        const idArrowheadNeutral = 'arrowheadneutral';
-        const idArrowheadFocused = 'arrowheadfocused';
-        const idArrowheadUnfocused = 'arrowheadunfocused';
-
-        //arrowheads
+        //Create Markers for the Edge Arrowheads
         if (SHOW_EDGE_ARROWHEADS) {
-            edgePaths.attr('marker-end', 'url(#' + idArrowheadNeutral + ')');
+            edges.attr('marker-end', 'url(#' + idArrowheadNeutral + ')');
 
-            //neutral gray arrow
+            //neutral arrowhead
             chartArea.append('defs')
                 .append('marker')
                 .attrs({'id':idArrowheadNeutral,
                     'viewBox':'-0 -5 10 10',
-                    'refX':30, //offset from edge. takes node shape into account
+                    'refX':EDGE_ARROWHEAD_OFFSET,
                     'refY':0,
                     'orient':'auto',
                     'markerWidth':7,
@@ -183,15 +241,13 @@
                     'xoverflow':'visible'})
                 .append('svg:path')
                 .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-                .attr('fill', EDGE_COLOR_DEFAULT)
-                .style('stroke','none');
 
-            //focused red arrow
+            //focused arrowhead
             chartArea.append('defs')
                 .append('marker')
                 .attrs({'id':idArrowheadFocused,
                     'viewBox':'-0 -5 10 10',
-                    'refX':30, //offset from edge. takes node shape into account
+                    'refX':EDGE_ARROWHEAD_OFFSET,
                     'refY':0,
                     'orient':'auto',
                     'markerWidth':7,
@@ -199,15 +255,13 @@
                     'xoverflow':'visible'})
                 .append('svg:path')
                 .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-                .attr('fill', HIGHLIGHT_COLOR)
-                .style('stroke','none');
 
-            //focused red arrow
+            //focused arrowhead
             chartArea.append('defs')
                 .append('marker')
                 .attrs({'id':idArrowheadUnfocused,
                     'viewBox':'-0 -5 10 10',
-                    'refX':30, //offset from edge. takes node shape into account
+                    'refX':EDGE_ARROWHEAD_OFFSET,
                     'refY':0,
                     'orient':'auto',
                     'markerWidth':7,
@@ -215,38 +269,103 @@
                     'xoverflow':'visible'})
                 .append('svg:path')
                 .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-                .attr('fill', EDGE_COLOR_UNFOCUSED)
-                .style('stroke','none');
         }
 
-        /* Draw Circles for Nodes */
-//        const nodeGroups = chartArea.selectAll(".node")
-//            .data(data.nodes)
-//            .enter().append("g")
-//            .attr("class", "node")
-//            .call(d3.drag()
-//                .on("start", dragstarted)
-//                .on("drag", dragged)
-//                .on("end", dragended)
-//            );
-//
-//        const nodes = nodeGroups.append("circle")
-//            .attr("r", NODE_RADIUS)
-//            //.style("stroke-width", STROKE_WIDTH_MIN)
-//            .style("fill", NODE_COLOR_DEFAULT);
-
+        //Draw Circles for the Nodes
         const nodes = chartArea.selectAll(".node")
             .data(data.nodes)
             .enter().append("circle")
             .attr("r", NODE_RADIUS)
-            //.style("stroke-width", STROKE_WIDTH_MIN)
-            .style("fill", NODE_COLOR_DEFAULT)
+            .attr("class", "node")
             .call(d3.drag()
                     .on("start", dragstarted)
                     .on("drag", dragged)
                     .on("end", dragended)
                 );
 
+        const nodeLabels = chartArea.selectAll(".nodelabel")
+            .data(data.nodes)
+            .enter().append("text")
+            .attr("class", "nodelabel")
+            .attr("dy", ".35em")
+            .text(d => d.id)
+            .style("text-anchor", "middle");
+
+
+        /* SETUP MOUSE BEHAVIOR */
+
+        nodes.on("mouseover", function (d) {
+            highlightNeighboringNodesOf(d);
+            blurNodesThatAreNotNeighborsOf(d);
+        });
+        nodes.on("mouseout", removeNodeSpecialCssClasses);
+
+        nodes.on("mousedown", function(d) {
+            d3.event.stopPropagation();
+
+            highlightNeighboringNodesOf(d);
+            blurNodesThatAreNotNeighborsOf(d);
+        });
+
+        d3.select(window).on("mouseup", removeNodeSpecialCssClasses);
+
+        /* SETUP ZOOM BEHAVIOR */
+
+        const zoomHandler = d3.zoom()
+            .scaleExtent([-Infinity,Infinity])
+            .on("zoom", () => {
+                    chartArea.attr("transform", d3.event.transform)
+                });
+
+        zoomHandler(svg);
+
+        /* UTILITY FUNCTIONS */
+
+        //update position of nodes and edges every simulation tick
+        function ticked() {
+            if (!optimizer.isTimeForUpdate()) {
+                return;
+            }
+
+            nodes
+//                .transition() //TEST
+//                .duration(200) //TEST
+//                .ease(d3.easeLinear)
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            nodeLabels
+//                .transition() //TEST
+//                .duration(200) //TEST
+//                .ease(d3.easeLinear)
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+
+            if (SHOW_EDGES) {
+                edges
+//                    .transition() //TEST
+//                    .duration(200) //TEST
+//                    .ease(d3.easeLinear)
+                    .attr('d', d => 'M ' + d.source.x + ' ' + d.source.y + ' L ' + d.target.x + ' ' + d.target.y);
+            }
+
+            //Flips EdgeLabel so it won't appear upside-down
+            if (EDGELABEL_KEEP_UPRIGHT) {
+                edgeLabels.attr('transform', function (d) {
+                    if (d.target.x < d.source.x) {
+                        const bbox = this.getBBox();
+                        const rx = bbox.x + bbox.width / 2;
+                        const ry = bbox.y + bbox.height / 2;
+                        return 'rotate(180 ' + rx + ' ' + ry + ')';
+                    }
+                    else {
+                        return 'rotate(0)';
+                    }
+                });
+            }
+        }
+
+        //Node mouse-drag behavior
         function dragstarted(d) {
             if (!d3.event.active) {
                 simulation.alphaTarget(0.3).restart();
@@ -271,100 +390,6 @@
             d.fy = null;
         }
 
-        //add labels to the nodes
-        const nodeLabels = chartArea.selectAll(".nodelabel")
-            .data(data.nodes)
-            .enter().append("text")
-            .attr("class", "nodelabel")
-            .attr("dy", ".35em")
-            .style("font-size", NODELABEL_TEXTSIZE + "px")
-            .text(d => d.id)
-            .style("text-anchor", "middle");
-
-
-        /* MOUSE */
-        //nodeGroups.on("dblclick.zoom", centerNode);
-        nodes.on("mouseover", function (d) {
-            highlightNeighboringNodesOf(d);
-            blurNodesThatAreNotNeighborsOf(d);
-        });
-        nodes.on("mouseout", removeNodeHighlights);
-
-        //remove non-adjacents on mouse down
-        nodes.on("mousedown", function(d) {
-            d3.event.stopPropagation();
-
-            highlightNeighboringNodesOf(d);
-            blurNodesThatAreNotNeighborsOf(d);
-        });
-
-        d3.select(window).on("mouseup", removeNodeHighlights);
-
-        /* ZOOM */
-        const zoomHandler = d3.zoom()
-            .scaleExtent([-Infinity,Infinity])
-            .on("zoom", () => {
-                    chartArea.attr("transform", d3.event.transform)
-                });
-
-        zoomHandler(svg);
-
-        /* SIMULATION */
-		const optimizer = new Optimizer(RENDER_FRAMES_TO_SKIP);
-
-        simulation
-            .nodes(data.nodes)
-            .on("tick", ticked);
-
-        simulation.force("link")
-            .links(data.edges);
-
-        //update position of nodes and edges
-        function ticked() {
-
-            if (!optimizer.isTimeForUpdate()) {
-                return;
-            }
-
-            nodes
-//                .transition() //TEST
-//                .duration(200) //TEST
-//                .ease(d3.easeLinear)
-                .attr("cx", d => d.x)
-                .attr("cy", d => d.y);
-
-            nodeLabels
-//                .transition() //TEST
-//                .duration(200) //TEST
-//                .ease(d3.easeLinear)
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
-
-            if (SHOW_EDGES) {
-                edgePaths
-//                    .transition() //TEST
-//                    .duration(200) //TEST
-//                    .ease(d3.easeLinear)
-                    .attr('d', d => 'M ' + d.source.x + ' ' + d.source.y + ' L ' + d.target.x + ' ' + d.target.y);
-            }
-
-            //Flips EdgeLabel so it won't appear upside-down
-            if (EDGELABEL_KEEP_UPRIGHT) {
-                edgeLabels.attr('transform', function (d) {
-                    if (d.target.x < d.source.x) {
-                        const bbox = this.getBBox();
-                        const rx = bbox.x + bbox.width / 2;
-                        const ry = bbox.y + bbox.height / 2;
-                        return 'rotate(180 ' + rx + ' ' + ry + ')';
-                    }
-                    else {
-                        return 'rotate(0)';
-                    }
-                });
-            }
-        }
-
-        /* UTILITY FUNCTIONS */
         function isConnected(a, b) {
             return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index === b.index;
         }
@@ -372,51 +397,38 @@
         function highlightNeighboringNodesOf(subjectNode) {
             svg.style("cursor", "pointer");
 
-            nodes.style("fill", o => isConnected(subjectNode, o) ? HIGHLIGHT_COLOR : NODE_COLOR_DEFAULT);
-            nodeLabels.style("font-weight", o => isConnected(subjectNode, o) ? "bold" : "normal");
+            nodes.classed(classNameFocused, o => isConnected(subjectNode, o));
+            nodeLabels.classed(classNameFocused, o => isConnected(subjectNode, o));
+            edges.classed(classNameFocused, o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index));
+            edgeLabels.classed(classNameFocused, o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index));
 
-            edgePaths.style("stroke", o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? HIGHLIGHT_COLOR : EDGE_COLOR_DEFAULT);
-
-            edgePaths.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + idArrowheadFocused + ')') : ('url(#' + idArrowheadNeutral + ')'));
-
-
-            edgeLabels.style("fill", o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? HIGHLIGHT_COLOR : EDGE_COLOR_DEFAULT);
+            edges.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + idArrowheadFocused + ')') : ('url(#' + idArrowheadNeutral + ')'));
         }
 
-        function removeNodeHighlights() {
+        function removeNodeSpecialCssClasses() {
             svg.style("cursor","move");
 
-            nodes.style("fill", NODE_COLOR_DEFAULT);
-            nodeLabels.style("font-weight", "normal");
-            nodeLabels.style("fill", NODELABEL_COLOR_DEFAULT);
+            nodes.classed(classNameFocused, false);
+            nodeLabels.classed(classNameFocused, false);
+            edges.classed(classNameFocused, false);
+            edgeLabels.classed(classNameFocused, false);
 
-            edgePaths.style("stroke", EDGE_COLOR_DEFAULT);
-            edgePaths.attr('marker-end', 'url(#' + idArrowheadNeutral + ')');
+            nodes.classed(classNameUnfocused, false);
+            nodeLabels.classed(classNameUnfocused, false);
+            edges.classed(classNameUnfocused, false);
+            edgeLabels.classed(classNameUnfocused, false);
 
-            edgeLabels.style("fill", NODELABEL_COLOR_DEFAULT);
+            edges.attr('marker-end', 'url(#' + idArrowheadNeutral + ')');
         }
 
         function blurNodesThatAreNotNeighborsOf(subjectNode) {
-            nodes.style("fill", o => isConnected(subjectNode, o) ? HIGHLIGHT_COLOR : NODE_COLOR_UNFOCUSED);
-            nodeLabels.style("fill", o => isConnected(subjectNode, o) ? NODELABEL_COLOR_DEFAULT : NODELABEL_COLOR_UNFOCUSED);
+            nodes.classed(classNameUnfocused, o => !isConnected(subjectNode, o));
+            nodeLabels.classed(classNameUnfocused, o => !isConnected(subjectNode, o));
+            edges.classed(classNameUnfocused, o => !(o.source.index === subjectNode.index || o.target.index === subjectNode.index));
+            edgeLabels.classed(classNameUnfocused, o => !(o.source.index === subjectNode.index || o.target.index === subjectNode.index));
 
-            edgePaths.style("stroke", o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? HIGHLIGHT_COLOR : EDGE_COLOR_UNFOCUSED);
-
-            edgePaths.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + idArrowheadFocused + ')') : ('url(#' + idArrowheadUnfocused + ')'));
-
-
-            edgeLabels.style("fill", o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? HIGHLIGHT_COLOR : EDGE_COLOR_UNFOCUSED);
+            edges.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + idArrowheadFocused + ')') : ('url(#' + idArrowheadUnfocused + ')'));
         }
-
-        function centerNode(targetNode) {
-            d3.event.stopPropagation();
-            const dcx = (window.innerWidth / 2 - targetNode.x * zoomHandler.scale());
-            const dcy = (window.innerHeight / 2 - targetNode.y * zoomHandler.scale());
-
-            zoomHandler.translate([dcx,dcy]);
-            chartArea.attr("transform", "translate("+ dcx + "," + dcy  + ")scale(" + zoomHandler.scale() + ")");
-        }
-
 
         function handleKeypress() {
             if (d3.event.keyCode === 32) { //spacebar
