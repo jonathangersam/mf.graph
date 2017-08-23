@@ -64,17 +64,24 @@
         opacity: 0;
     }
 
+
+    .arrowhead {
+        stroke: none;
+    }
+
     #arrowheadneutral {
         fill: #c6c6c6;
-        stroke: none;
     }
     #arrowheadfocused {
         fill: red;
-        stroke: none;
     }
     #arrowheadunfocused {
         fill: #ceedf9;
-        stroke: none;
+    }
+
+    .arrowhead.focused {
+        stroke: green;
+        fill: blue;
     }
 
 </style>
@@ -178,10 +185,13 @@
         const classname_Focused = "focused";
         const classname_Unfocused = "unfocused";
         const classname_Fixed = "fixed";
+        const classname_Arrowhead = "arrowhead";
 
         const id_ArrowheadNeutral = 'arrowheadneutral';
         const id_ArrowheadFocused = 'arrowheadfocused';
         const id_ArrowheadUnfocused = 'arrowheadunfocused';
+        const id_ArrowheadFixed = 'arrowheadfixed';
+
 
         /* SETUP SIMULATION */
 
@@ -238,24 +248,17 @@
         if (SHOW_EDGE_ARROWHEADS) {
             edges.attr('marker-end', 'url(#' + id_ArrowheadNeutral + ')');
 
-            //neutral arrowhead
-            chartArea.append('defs')
-                .append('marker')
-                .attrs({'id':id_ArrowheadNeutral,
-                    'viewBox':'-0 -5 10 10',
-                    'refX':EDGE_ARROWHEAD_OFFSET,
-                    'refY':0,
-                    'orient':'auto',
-                    'markerWidth':7,
-                    'markerHeight':7,
-                    'xoverflow':'visible'})
-                .append('svg:path')
-                .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+            createArrowheadMarker(classname_Arrowhead, id_ArrowheadNeutral);
+            createArrowheadMarker(classname_Arrowhead, id_ArrowheadFocused);
+            createArrowheadMarker(classname_Arrowhead, id_ArrowheadUnfocused);
+            createArrowheadMarker(classname_Arrowhead, id_ArrowheadFixed);
+        }
 
-            //focused arrowhead
+        function createArrowheadMarker(classname, id) {
             chartArea.append('defs')
                 .append('marker')
-                .attrs({'id':id_ArrowheadFocused,
+                .attr('class', classname)
+                .attrs({'id':id,
                     'viewBox':'-0 -5 10 10',
                     'refX':EDGE_ARROWHEAD_OFFSET,
                     'refY':0,
@@ -264,21 +267,7 @@
                     'markerHeight':7,
                     'xoverflow':'visible'})
                 .append('svg:path')
-                .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-
-            //focused arrowhead
-            chartArea.append('defs')
-                .append('marker')
-                .attrs({'id':id_ArrowheadUnfocused,
-                    'viewBox':'-0 -5 10 10',
-                    'refX':EDGE_ARROWHEAD_OFFSET,
-                    'refY':0,
-                    'orient':'auto',
-                    'markerWidth':7,
-                    'markerHeight':7,
-                    'xoverflow':'visible'})
-                .append('svg:path')
-                .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+                .attr('d', 'M 0,-5 L 10 ,0 L 0,5');
         }
 
         //Draw Circles for the Nodes
@@ -314,50 +303,6 @@
                 d.fy = d.y;
             }
         });
-
-        function isNodeClassed(className, nodeIndex) {
-            return d3.select("#node" + nodeIndex).classed(className);
-        }
-
-        function apply_classnameFixed_toNeighboringEdges_leadingToFixedNodes(subjectNode) {
-            const isSubjectNodeClassedFixed = isNodeClassed(classname_Fixed, subjectNode.index);
-
-            //TODO: breakout the function body since they are the same
-            edges.each(function (d) {
-                //only consider your neighbor nodes - they're the only ones you're allowed to change
-                if (d.source.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.target.index) && isSubjectNodeClassedFixed);
-                }
-
-                if (d.target.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.source.index) && isSubjectNodeClassedFixed);
-                }
-            });
-
-            edgeLabels.each(function (d) {
-                //only consider your neighbor nodes - they're the only ones you're allowed to change
-                if (d.source.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.target.index) && isSubjectNodeClassedFixed);
-                }
-
-                if (d.target.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.source.index) && isSubjectNodeClassedFixed);
-                }
-            });
-
-            //edges.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + id_ArrowheadFocused + ')') : ('url(#' + id_ArrowheadNeutral + ')'));
-        }
-
-        function addClassnameFixed(d) {
-            //only consider your neighbor nodes - they're the only ones you're allowed to change
-            if (d.source.index === subjectNode.index) {
-                d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.source.index));
-            }
-
-            if (d.target.index === subjectNode.index) {
-                d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.target.index));
-            }
-        }
 
         const nodeLabels = chartArea.selectAll(".nodelabel")
             .data(data.nodes)
@@ -472,8 +417,44 @@
             }
         }
 
+        //convenience functions
         function isConnected(a, b) {
             return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index === b.index;
+        }
+
+        function isNodeClassed(className, nodeIndex) {
+            return d3.select("#node" + nodeIndex).classed(className);
+        }
+
+        //functions for changing css classes
+        function apply_classnameFixed_toNeighboringEdges_leadingToFixedNodes(subjectNode) {
+            const isSubjectNodeClassedFixed = isNodeClassed(classname_Fixed, subjectNode.index);
+
+            //TODO: breakout the function body since they are the same
+            edges.each(function (d) {
+                //only consider your neighbor nodes - they're the only ones you're allowed to change
+                if (d.source.index === subjectNode.index) {
+                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.target.index) && isSubjectNodeClassedFixed);
+
+                    //TODO: make this work
+                    edges.attr('marker-end', o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index) ? ('url(#' + id_ArrowheadFixed + ')') : ('url(#' + id_ArrowheadNeutral + ')'));
+                }
+
+                if (d.target.index === subjectNode.index) {
+                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.source.index) && isSubjectNodeClassedFixed);
+                }
+            });
+
+            edgeLabels.each(function (d) {
+                //only consider your neighbor nodes - they're the only ones you're allowed to change
+                if (d.source.index === subjectNode.index) {
+                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.target.index) && isSubjectNodeClassedFixed);
+                }
+
+                if (d.target.index === subjectNode.index) {
+                    d3.select(this).classed(classname_Fixed, isNodeClassed(classname_Fixed, d.source.index) && isSubjectNodeClassedFixed);
+                }
+            });
         }
 
         function highlightNeighboringNodesOf(subjectNode) {
