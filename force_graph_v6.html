@@ -13,7 +13,7 @@
 
     .node {
         fill: #40a2e5;
-        /* stroke-width: none; */
+        stroke-width: none;
     }
     .node.reachable {
         fill: #4fc2e5;
@@ -22,13 +22,16 @@
         fill: orange;
     }
     .node.focused {
-        fill: red;
+        /* fill: red; */
+        stroke: red;
+        stroke-width: 3;
     }
 
     .nodelabel {
         fill: black;
         font-size: 7px;
         font-weight: normal;
+        text-anchor: middle;
     }
     .nodelabel.focused {
         font-weight: bold;
@@ -50,6 +53,7 @@
         fill: #c6c6c6;
         font-size: 6px;
         font-weight: normal;
+        text-anchor: middle;
     }
     .edgelabel.fixed {
         fill: orange;
@@ -121,7 +125,8 @@
             {"source": 3, "target": 5, "label": "Is-a"},
             {"source": 3, "target": 6, "label": "Is-the"},
             {"source": 3, "target": 7, "label": "Is-really"},
-            {"source": 3, "target": 8, "label": "Is-quite"}
+            {"source": 3, "target": 8, "label": "Is-quite"},
+            {"source": 3, "target": 7, "label": "R-E-A-L-L-Y"}
         ]
     };
 
@@ -162,7 +167,7 @@
     / defocused nodes should be transparent instead of just low-saturation
     / defocused edgePaths should be transparent instead of just low-saturation
     / right click on a node and it should fix focus (node itself and connected edges)
-    - Fixed arrowheads should be orange. Can we cascade markers? .arrowhead.focused {fill: red}?
+    / Fixed arrowheads should be orange. Can we cascade markers? .arrowhead.focused {fill: red}?
     - index.js CSV to JSON converter: foreach edge: if node-target combo is present already, update existing's edge by concatenating the new edge.
     / make nodes collide like solid disks
      */
@@ -184,26 +189,34 @@
         const EDGE_ARROWHEAD_OFFSET = 30; //distance from tip of an edge. adjust based on node radius
 
         //special classnames
-        const classname_Focused = "focused";
-        const classname_Unfocused = "unfocused";
-        const classname_Fixed = "fixed";
-        const classname_Reachable = "reachable";
-        const classname_Arrowhead = "arrowhead";
+        const classnames = {
+            node: "node",
+            nodeLabel: "nodelabel",
+            edge: "edge",
+            edgeLabel: "edgelabel",
+            focused: "focused",
+            unfocused: "unfocused",
+            fixed: "fixed",
+            reachable: "reachable",
+            arrowhead: "arrowhead"
+        };
+        
+        const ids = {
+            arrowheadNeutral: "arrowheadneutral",
+            arrowheadFocused: "arrowheadfocused",
+            arrowheadUnfocused: "arrowheadunfocused",
+            arrowheadFixed: "arrowheadfixed"
+        };
 
-        const id_ArrowheadNeutral = 'arrowheadneutral';
-        const id_ArrowheadFocused = 'arrowheadfocused';
-        const id_ArrowheadUnfocused = 'arrowheadunfocused';
-        const id_ArrowheadFixed = 'arrowheadfixed';
+        /* INITIALIZATIONS */
 
+        const localEdges = data.edges;
+
+        const linkedNodes = data.edges
+            .map(d => (d.source + "," + d.target))
+            .filter((d, i, a) => i === a.indexOf(d));
 
         /* SETUP SIMULATION */
-
-        //build list of linked nodes
-        let linkedByIndex = {};
-
-        data.edges.forEach(function(d) {
-            linkedByIndex[d.source + "," + d.target] = true;
-        });
 
         //Setup simulation Forces
         const simulation = d3.forceSimulation()
@@ -224,48 +237,55 @@
         /* DRAW NODES AND EDGES */
 
         //Draw Paths for the Edges
-        const edges = chartArea.selectAll(".edge")
+        const edges = chartArea.selectAll("." + classnames.edge)
             .data(data.edges)
             .enter()
             .append('path')
-            .attr('class', 'edge')
-            .attr('id', (d,i) => 'edge' + i)
-            .style("pointer-events", "none");
+            .style("pointer-events", "none")
+            .attrs({
+                'class': 'edge',
+                'id': (d,i) => 'edge' + i
+            });
 
-        const edgeLabels = chartArea.selectAll(".edgelabel")
+        const edgeLabels = chartArea.selectAll("." + classnames.edgeLabel)
             .data(data.edges)
             .enter()
             .append("text")
             .style("pointer-events", "none")
-            .attr('class', 'edgelabel')
-            .attr('id', (d, i) => 'edgelabel' + i);
+            .attrs({
+                    'class': 'edgelabel',
+                    'id': (d,i) => 'edgelabel' + i
+                });
 
         edgeLabels.append('textPath')
-            .attr('xlink:href', (d,i) => '#edge' + i)
-            .style("text-anchor", "middle")
             .style("pointer-events", "none")
-            .attr("startOffset", "50%")
+            .attrs({
+                    "xlink:href": (d, i) => '#edge' + i,
+                    "startOffset": "50%"
+                })
             .text(d => d.label);
 
         //Create Markers for the Edge Arrowheads
         if (SHOW_EDGE_ARROWHEADS) {
-            //edges.attr('marker-end', 'url(#' + id_ArrowheadNeutral + ')');
+            //edges.attr('marker-end', 'url(#' + ids.arrowheadNeutral + ')');
 
-            createArrowheadMarker(classname_Arrowhead, id_ArrowheadNeutral);
-            createArrowheadMarker(classname_Arrowhead, id_ArrowheadFocused);
-            createArrowheadMarker(classname_Arrowhead, id_ArrowheadUnfocused);
-            createArrowheadMarker(classname_Arrowhead, id_ArrowheadFixed);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadNeutral);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFocused);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadUnfocused);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFixed);
 
             updateEdgeArrowheads();
         }
 
         //Draw Circles for the Nodes
-        const nodes = chartArea.selectAll(".node")
+        const nodes = chartArea.selectAll("." + classnames.node)
             .data(data.nodes)
             .enter().append("circle")
-            .attr("r", NODE_RADIUS)
-            .attr("class", "node")
-            .attr('id', (d,i) => 'node' + i)
+            .attrs({
+                    "class": classnames.node,
+                    "r": NODE_RADIUS,
+                    "id": (d,i) => classnames.node + i
+                })
             .call(d3.drag()
                     .on("start", dragstarted)
                     .on("drag", dragged)
@@ -275,8 +295,8 @@
         nodes.on('contextmenu', function (d) { //right-click
             d3.event.preventDefault(); //prevent the browser's normal right-click menu
 
-            const wasThisNodeFixed = d3.select(this).classed(classname_Fixed);
-            d3.select(this).classed(classname_Fixed, !wasThisNodeFixed);
+            const wasThisNodeFixed = d3.select(this).classed(classnames.fixed);
+            d3.select(this).classed(classnames.fixed, !wasThisNodeFixed);
             fixEdgesConnectedTo(d);
             flagReachableNodes(d);
 
@@ -286,20 +306,20 @@
 
         });
 
-        const nodeLabels = chartArea.selectAll(".nodelabel")
+        const nodeLabels = chartArea.selectAll("." + classnames.nodeLabel)
             .data(data.nodes)
             .enter().append("text")
-            .attr("class", "nodelabel")
-            .attr("dy", ".35em")
-            .text(d => d.id)
-            .style("text-anchor", "middle");
-
+            .attrs({
+                    "class": classnames.nodeLabel,
+                    "dy": ".35em"
+                })
+            .text(d => d.id);
 
         /* SETUP MOUSE BEHAVIOR */
 
         nodes.on("mouseover", function (d) {
             focusNeighborsOf(d);
-            defocusNonNeighborsOf(d);
+            unfocusNonNeighborsOf(d);
         });
         nodes.on("mouseout", removeFocusAndUnfocusClasses);
 
@@ -307,7 +327,7 @@
             d3.event.stopPropagation();
 
             focusNeighborsOf(d);
-            defocusNonNeighborsOf(d);
+            unfocusNonNeighborsOf(d);
         });
 
         d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
@@ -377,7 +397,7 @@
             d.fy = d.y;
 
             if (NODEDRAG_FIXES_POSITION) {
-                d3.select(this).classed(classname_Fixed, true);
+                d3.select(this).classed(classnames.fixed, true);
                 fixEdgesConnectedTo(d);
             }
         }
@@ -393,7 +413,7 @@
             }
 
             //if this node doesn't have the "fixed" classname applied, realease fx (fixed-x) and fy (fixed-y)
-            if (!d3.select(this).classed(classname_Fixed)) {
+            if (!d3.select(this).classed(classnames.fixed)) {
                 d.fx = null;
                 d.fy = null;
             }
@@ -402,49 +422,41 @@
         //functions for changing css classes
         function fixEdgesConnectedTo(subjectNode) {
             //curry function by supplying 1st arg. for convenience.
-            const isFixed = isNodeClassed.bind(null, classname_Fixed);
+            const isFixed = isNodeClassed.bind(null, classnames.fixed);
             const isSubjectFixed = isFixed(subjectNode.index);
 
-            edges.each(function (d) {
-                //only consider your neighbor nodes - they're the only ones you're allowed to change.
-                //then toggle-on the Classname if the Edge is between 2 fixed nodes
-                if (d.source.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isFixed(d.target.index) && isSubjectFixed)
-                } else if (d.target.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isFixed(d.source.index) && isSubjectFixed)
-                }
-            });
+            //toggle-on classname='fixed' if the Edge is between 2 fixed nodes
+            edges.filter(d => d.source.index === subjectNode.index) //edges w SubjectNode as the Source
+                .classed(classnames.fixed, d => isFixed(d.target.index) && isSubjectFixed);
 
-            edgeLabels.each(function (d) {
-                //only consider your neighbor nodes - they're the only ones you're allowed to change.
-                //then toggle-on the Classname if the Edge is between 2 fixed nodes
-                if (d.source.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isFixed(d.target.index) && isSubjectFixed);
-                } else if (d.target.index === subjectNode.index) {
-                    d3.select(this).classed(classname_Fixed, isFixed(d.source.index) && isSubjectFixed);
-                }
-            });
+            edges.filter(d => d.target.index === subjectNode.index) //edges targeting the SubjectNode
+                .classed(classnames.fixed, d => isFixed(d.source.index) && isSubjectFixed);
+
+            edgeLabels.filter(d => d.source.index === subjectNode.index) //edges w SubjectNode as the Source
+                .classed(classnames.fixed, d => isFixed(d.target.index) && isSubjectFixed);
+
+            edgeLabels.filter(d => d.target.index === subjectNode.index) //edges targeting the SubjectNode
+                .classed(classnames.fixed, d => isFixed(d.source.index) && isSubjectFixed);
 
             updateEdgeArrowheads();
         }
 
         function flagReachableNodes() {
             //curry function by supplying 1st arg. for convenience.
-            const isFixed = isNodeClassed.bind(null, classname_Fixed);
+            const isFixed = isNodeClassed.bind(null, classnames.fixed);
 
             //initially remove all "reachable" class tags
-            nodes.classed(classname_Reachable, false);
+            nodes.classed(classnames.reachable, false);
 
-            edges.each(function (d) {
-                //if neighbor to a fixed node, tag this node as class=reacheable
-                if (isFixed(d.source.index)) {
-                    getNodeByIndex(d.target.index).classed(classname_Reachable, true);
-                }
+            edges.filter(d => isFixed(d.source.index)) //edges whose Source Node is Fixed
+                .each(function (d) {
+                    selectNodeByIndex(d.target.index).classed(classnames.reachable, true);
+                });
 
-                if (isFixed(d.target.index)) {
-                    getNodeByIndex(d.source.index).classed(classname_Reachable, true);
-                }
-            });
+            edges.filter(d => isFixed(d.target.index)) //edges whose Target Node is Fixed
+                .each(function (d) {
+                    selectNodeByIndex(d.source.index).classed(classnames.reachable, true);
+                });
 
             //updateEdgeArrowheads();
         }
@@ -452,19 +464,29 @@
         function focusNeighborsOf(subjectNode) {
             svg.style("cursor", "pointer");
 
-            nodes.classed(classname_Focused, o => isConnected(subjectNode, o));
-            nodeLabels.classed(classname_Focused, o => isConnected(subjectNode, o));
-            edges.classed(classname_Focused, o => (o.source.index === subjectNode.index || o.target.index === subjectNode.index));
-            edgeLabels.classed(classname_Focused, o =>(o.source.index === subjectNode.index || o.target.index === subjectNode.index));
+            nodes.classed(classnames.focused, d => isConnected(d, subjectNode));
+            nodeLabels.classed(classnames.focused, d => isConnected(d, subjectNode));
+
+            edges.classed(classnames.focused, d =>
+                (d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            );
+            edgeLabels.classed(classnames.focused, d =>
+                (d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            );
 
             updateEdgeArrowheads();
         }
 
-        function defocusNonNeighborsOf(subjectNode) {
-            nodes.classed(classname_Unfocused, o => !isConnected(subjectNode, o));
-            nodeLabels.classed(classname_Unfocused, o => !isConnected(subjectNode, o));
-            edges.classed(classname_Unfocused, o => !(o.source.index === subjectNode.index || o.target.index === subjectNode.index));
-            edgeLabels.classed(classname_Unfocused, o => !(o.source.index === subjectNode.index || o.target.index === subjectNode.index));
+        function unfocusNonNeighborsOf(subjectNode) {
+            nodes.classed(classnames.unfocused, d => !isConnected(d, subjectNode));
+            nodeLabels.classed(classnames.unfocused, d => !isConnected(d, subjectNode));
+
+            edges.classed(classnames.unfocused, d =>
+                !(d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            );
+            edgeLabels.classed(classnames.unfocused, d =>
+                !(d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            );
 
             updateEdgeArrowheads();
         }
@@ -472,15 +494,15 @@
         function removeFocusAndUnfocusClasses() {
             svg.style("cursor","move");
 
-            nodes.classed(classname_Focused, false);
-            nodeLabels.classed(classname_Focused, false);
-            edges.classed(classname_Focused, false);
-            edgeLabels.classed(classname_Focused, false);
+            nodes.classed(classnames.focused, false);
+            nodeLabels.classed(classnames.focused, false);
+            edges.classed(classnames.focused, false);
+            edgeLabels.classed(classnames.focused, false);
 
-            nodes.classed(classname_Unfocused, false);
-            nodeLabels.classed(classname_Unfocused, false);
-            edges.classed(classname_Unfocused, false);
-            edgeLabels.classed(classname_Unfocused, false);
+            nodes.classed(classnames.unfocused, false);
+            nodeLabels.classed(classnames.unfocused, false);
+            edges.classed(classnames.unfocused, false);
+            edgeLabels.classed(classnames.unfocused, false);
 
             updateEdgeArrowheads();
         }
@@ -490,14 +512,14 @@
             edges.each(function (){
                 const thisEdge = d3.select(this); //convenience var
 
-                if (thisEdge.classed(classname_Focused)){
-                    thisEdge.attr('marker-end', formatMarkerUrl(id_ArrowheadFocused));
-                } else if (thisEdge.classed(classname_Fixed)) {
-                    thisEdge.attr('marker-end', formatMarkerUrl(id_ArrowheadFixed));
-                } else if (thisEdge.classed(classname_Unfocused)) {
-                    thisEdge.attr('marker-end', formatMarkerUrl(id_ArrowheadUnfocused));
+                if (thisEdge.classed(classnames.focused)){
+                    thisEdge.attr('marker-end', formatMarkerUrl(ids.arrowheadFocused));
+                } else if (thisEdge.classed(classnames.fixed)) {
+                    thisEdge.attr('marker-end', formatMarkerUrl(ids.arrowheadFixed));
+                } else if (thisEdge.classed(classnames.unfocused)) {
+                    thisEdge.attr('marker-end', formatMarkerUrl(ids.arrowheadUnfocused));
                 } else {
-                    thisEdge.attr('marker-end', formatMarkerUrl(id_ArrowheadNeutral));
+                    thisEdge.attr('marker-end', formatMarkerUrl(ids.arrowheadNeutral));
                 }
             });
         }
@@ -505,29 +527,32 @@
         function createArrowheadMarker(classname, id) {
             chartArea.append('defs')
                 .append('marker')
-                .attr('class', classname)
-                .attrs({'id':id,
-                    'viewBox':'-0 -5 10 10',
-                    'refX':EDGE_ARROWHEAD_OFFSET,
-                    'refY':0,
-                    'orient':'auto',
-                    'markerWidth':7,
-                    'markerHeight':7,
-                    'xoverflow':'visible'})
+                .attrs({
+                    'id': id,
+                    'class': classname,
+                    'viewBox': '-0 -5 10 10',
+                    'refX': EDGE_ARROWHEAD_OFFSET,
+                    'refY': 0,
+                    'orient': 'auto',
+                    'markerWidth' :7,
+                    'markerHeight' :7,
+                    'xoverflow': 'visible'})
                 .append('svg:path')
                 .attr('d', 'M 0,-5 L 10 ,0 L 0,5');
         }
 
         //convenience/utility functions
         function isConnected(a, b) {
-            return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index === b.index;
+            return linkedNodes.indexOf(a.index + "," + b.index) >= 0 ||
+                linkedNodes.indexOf(b.index + "," + a.index) >= 0 ||
+                a.index === b.index;
         }
 
         function isNodeClassed(className, nodeIndex) {
             return d3.select("#node" + nodeIndex).classed(className);
         }
 
-        function getNodeByIndex(nodeIndex) {
+        function selectNodeByIndex(nodeIndex) {
             return d3.select("#node" + nodeIndex);
         }
 
