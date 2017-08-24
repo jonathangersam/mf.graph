@@ -163,6 +163,7 @@
     /*
     TODOS
     - for linked nodes that have several edges, concatenate those edge labels.
+    - try if using lines instead of paths is better. and can you still have the arrowheads w/ path stroke=none?
     - index.js CSV to JSON converter: foreach edge: if node-target combo is present already, update existing's edge by concatenating the new edge.
      */
 
@@ -204,7 +205,26 @@
 
         /* INITIALIZATIONS */
 
-        const localEdges = data.edges;
+        //TODO: make this work
+        console.log('---DEFAULT EDGES---\n', data.edges);
+        let init = [1,2,3];
+        const localEdges = data.edges.reduce(function(accum, e, i, a){
+            const matchingEdges = a.filter(d => d.source === e.source && d.target === e.target);
+            if (matchingEdges.length === 1) { //unique Source-Target pair
+                accum.push(e);
+                return accum;
+            }
+
+            const firstIndexOfE = matchingEdges.indexOf(e);
+            if (firstIndexOfE === i) {
+                return accum;
+            }
+
+            a[firstIndexOfE].label += ', ' + e.label;
+            return accum;
+        }, init);
+        console.log('+++LOCAL EDGES+++\n', localEdges);
+
 
         const linkedNodes = data.edges
             .map(d => (d.source + "," + d.target))
