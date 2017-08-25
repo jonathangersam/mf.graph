@@ -163,11 +163,11 @@
     /*
     TODOS
     / for linked nodes that have several edges, concatenate those edge labels.
-    - fix: right-clicking node to toggle "fixed" class removes focus. split function on removing focused and unfocused classes
-    - adaptive framerate for large number of nodes
-	- on resize, center the graph again
+    / fix: right-clicking node to toggle "fixed"d class removes focus. split function on removing focused and unfocused classes
+    ... adaptive framerate for large number of nodes. A: seems D3 already auto-adapts (ie tick is a callback, when no sim updates, its not called.)
+	- on window resize, center the graph again
 	- add lines to visualize edges (in addition to paths) - will this be more efficient for visualization?
-	- add: node:mouseover: pop the hovered node
+	/ add: node:mouseover: pop the hovered node
     - try if using lines instead of paths is better. and can you still have the arrowheads w/ path stroke=none?
     - index.js CSV to JSON converter: foreach edge: if node-target combo is present already, update existing's edge by concatenating the new edge.
      */
@@ -178,7 +178,8 @@
         const EDGELABEL_KEEP_UPRIGHT = false;
         const SHOW_EDGES = true;
         const SHOW_EDGE_ARROWHEADS = true;
-        const RENDER_FRAMES_TO_SKIP = 2;
+        const ADAPTIVERENDERER_TICKSKIP_MAXFRAMES = 10;
+        const ADAPTIVERENDERER_TICKSKIP_MAXWAIT = 200; //in ms
         const NODEDRAG_FIXES_POSITION = false;
         const NODE_COLLISION_PADDING = 1;
 
@@ -186,6 +187,8 @@
         const LINK_DISTANCE = 100;
         const GRAPH_CHARGE = -100;
         const NODE_RADIUS = 20;
+        const NODE_POP_SIZE = 5;
+        const NODE_POP_DURATION = 400;
         const EDGE_ARROWHEAD_OFFSET = 30; //distance from tip of an edge. adjust based on node radius
 
         //special classnames
@@ -224,11 +227,23 @@
             .force("charge", d3.forceManyBody().strength(GRAPH_CHARGE))
             .force("center", d3.forceCenter(w / 2, h / 2)); //todo: convert to +svg.attr("width"), +svg.attr("width")
 
-        const optimizer = new Optimizer(RENDER_FRAMES_TO_SKIP);
+        //const framerateController = new AdaptiveFramerate(ADAPTIVERENDERER_TICKSKIP_MAXFRAMES, ADAPTIVERENDERER_TICKSKIP_MAXWAIT);
+        const skipFrames = ADAPTIVERENDERER_TICKSKIP_MAXFRAMES;
 
         simulation
             .nodes(graph.nodes)
-            .on("tick", ticked);
+            .on("tick", d => {
+//              console.log('ticked at', new Date());
+//              if (!framerateController.isTimeForUpdate()) {
+//                  return;
+//              }
+                skipFrames--;
+                if (skipFrames > 0) {
+
+                }
+
+                ticked();
+            });
 
         simulation.force("link")
             .links(graph.edges);
@@ -317,13 +332,21 @@
         /* SETUP MOUSE BEHAVIOR */
 
         nodes.on("mouseover", function (d) {
+            d3.select(this)
+                .attr('r', NODE_RADIUS + NODE_POP_SIZE)
+                .transition()
+                .duration(NODE_POP_DURATION)
+                .attr('r', NODE_RADIUS);
+
+
             focusNeighborsOf(d);
             unfocusNonNeighborsOf(d);
         });
         //nodes.on("mouseout", removeFocusAndUnfocusClasses);
         nodes.on("mouseout", d => {
-            console.log('*** mouseout ***');
-            removeFocusAndUnfocusClasses(d); //TODO: split into 2. remove focus on mouseout only
+            svg.style("cursor","move");
+            removeFocused(d);
+            removeUnfocused(d);
         });
 
         nodes.on("mousedown", function(d) {
@@ -334,10 +357,6 @@
         });
 
         //d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
-        d3.select(window).on("mouseup", d => {
-            log('*** mouseup ***');
-            removeFocusAndUnfocusClasses(d);
-        });
 
         function log(msg){
             console.log(msg);
@@ -357,10 +376,6 @@
 
         //update position of nodes and edges every simulation tick
         function ticked() {
-            if (!optimizer.isTimeForUpdate()) {
-                return;
-            }
-
             nodes
 //                .transition() //TEST
 //                .duration(200) //TEST
@@ -502,14 +517,16 @@
             updateEdgeArrowheads();
         }
 
-        function removeFocusAndUnfocusClasses() {
-            svg.style("cursor","move");
-
+        function removeFocused() {
             nodes.classed(classnames.focused, false);
             nodeLabels.classed(classnames.focused, false);
             edges.classed(classnames.focused, false);
             edgeLabels.classed(classnames.focused, false);
 
+            updateEdgeArrowheads();
+        }
+
+        function removeUnfocused() {
             nodes.classed(classnames.unfocused, false);
             nodeLabels.classed(classnames.unfocused, false);
             edges.classed(classnames.unfocused, false);
@@ -602,17 +619,54 @@
             }
         }
 
-        function Optimizer(framesToSkip){
-			const max = framesToSkip + 1;
-			let count = 0;
-			
+        //if tick rate is too far apart, adapt the target framerate by backing off render calls
+        function AdaptiveFramerate(maxTicksToSkip, maxWaitTime){
+			const _maxTicksToSkip = (maxTicksToSkip || 5);
+			const _maxWaitTime = maxWaitTime || 200;
+
+            const scale = d3.scaleLinear()
+                .domain([16, _maxWaitTime])
+                .rangeRound([0, _maxTicksToSkip]) //round to int
+                .clamp(true); //do not go beyond specified ranges
+
+            let lastUpdateTime = new Date();
+            let remainingTicksToSkip = 0;
+
+//            let first = true;
+
 			return {
 				isTimeForUpdate: function () {
-					count = ++count % max;
-					return !count;
+				    return true;
+//				    if (first) {
+//                        first = false;
+//                        console.log('input=' + 0, 'value=' + scale(0));
+//                        console.log('input=' + 50, 'value=' + scale(50));
+//                        console.log('input=' + 100, 'value=' + scale(100));
+//                        console.log('input=' + 150, 'value=' + scale(150));
+//                        console.log('input=' + 200, 'value=' + scale(200));
+//                        console.log('input=' + 300, 'value=' + scale(300));
+//                        console.log('input=' + 400, 'value=' + scale(400));
+//                    }
+//				    return true;
+
+                    remainingTicksToSkip--;
+
+                    if (remainingTicksToSkip > 0) {
+                        console.log('tick skipped');
+                        return false;
+                    }
+
+                    const now = new Date();
+                    const deltaTime = now - lastUpdateTime;
+                    remainingTicksToSkip = scale(deltaTime); //scale based on delta time
+
+                    console.log('deltaTime=' + deltaTime, 'remainingTicksToSkip=' + remainingTicksToSkip);
+
+                    lastUpdateTime = now;
+                    return true;
 				}
 			}
-		}
+        }
     }
     //END OF MAIN
 
