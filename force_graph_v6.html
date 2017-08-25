@@ -24,7 +24,7 @@
     .node.focused {
         /* fill: red; */
         stroke: red;
-        stroke-width: 3;
+        stroke-width: 1.5;
     }
 
     .nodelabel {
@@ -162,6 +162,10 @@
 
     /*
     TODOS
+    - extract node-removal code into own function
+    - the filter-out pattern should be extracted to a higher-order function
+    - update linkedNodes after removing nodes
+    - try restoring of nodes and links
     / for linked nodes that have several edges, concatenate those edge labels.
     / fix: right-clicking node to toggle "fixed"d class removes focus. split function on removing focused and unfocused classes
     ... adaptive framerate for large number of nodes. A: seems D3 already auto-adapts (ie tick is a callback, when no sim updates, its not called.)
@@ -178,7 +182,7 @@
         const EDGELABEL_KEEP_UPRIGHT = false;
         const SHOW_EDGES = true;
         const SHOW_EDGE_ARROWHEADS = true;
-        const ADAPTIVERENDERER_TICKSKIP_MAXFRAMES = 10;
+        const ADAPTIVERENDERER_TICKSKIP_MAXFRAMES = 0;
         const ADAPTIVERENDERER_TICKSKIP_MAXWAIT = 200; //in ms
         const NODEDRAG_FIXES_POSITION = false;
         const NODE_COLLISION_PADDING = 1;
@@ -214,6 +218,7 @@
         /* INITIALIZATIONS */
 
         const graph = cloneGraph(data); //make independent local copy
+
         const linkedNodes = graph.edges
             .map(d => (d.source + "," + d.target))
             .filter((d, i, a) => i === a.indexOf(d));
@@ -228,7 +233,7 @@
             .force("center", d3.forceCenter(w / 2, h / 2)); //todo: convert to +svg.attr("width"), +svg.attr("width")
 
         //const framerateController = new AdaptiveFramerate(ADAPTIVERENDERER_TICKSKIP_MAXFRAMES, ADAPTIVERENDERER_TICKSKIP_MAXWAIT);
-        const skipFrames = ADAPTIVERENDERER_TICKSKIP_MAXFRAMES;
+        let skipFrames = ADAPTIVERENDERER_TICKSKIP_MAXFRAMES;
 
         simulation
             .nodes(graph.nodes)
@@ -239,8 +244,9 @@
 //              }
                 skipFrames--;
                 if (skipFrames > 0) {
-
+                    return;
                 }
+                skipFrames = ADAPTIVERENDERER_TICKSKIP_MAXFRAMES;
 
                 ticked();
             });
@@ -251,7 +257,7 @@
         /* DRAW NODES AND EDGES */
 
         //Draw Paths for the Edges
-        const edges = chartArea.selectAll("." + classnames.edge)
+        let edges = chartArea.selectAll("." + classnames.edge)
             .data(graph.edges)
             .enter()
             .append('path')
@@ -261,7 +267,7 @@
                 'id': (d,i) => 'edge' + i
             });
 
-        const edgeLabels = chartArea.selectAll("." + classnames.edgeLabel)
+        let edgeLabels = chartArea.selectAll("." + classnames.edgeLabel)
             .data(graph.edges)
             .enter()
             .append("text")
@@ -292,7 +298,7 @@
         }
 
         //Draw Circles for the Nodes
-        const nodes = chartArea.selectAll("." + classnames.node)
+        let nodes = chartArea.selectAll("." + classnames.node)
             .data(graph.nodes)
             .enter().append("circle")
             .attrs({
@@ -320,7 +326,7 @@
 
         });
 
-        const nodeLabels = chartArea.selectAll("." + classnames.nodeLabel)
+        let nodeLabels = chartArea.selectAll("." + classnames.nodeLabel)
             .data(graph.nodes)
             .enter().append("text")
             .attrs({
@@ -357,6 +363,9 @@
         });
 
         //d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
+        d3.select(window)
+            //.on("resize", handleResize)
+            .on("keydown", handleKeypress);
 
         function log(msg){
             console.log(msg);
@@ -614,8 +623,70 @@
         }
 
         function handleKeypress() {
+            console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
             if (d3.event.keyCode === 32) { //spacebar
                 simulation.stop();
+            }
+
+            if (d3.event.keyCode === 80) { //p
+                d3.event.stopPropagation();
+
+                /* NODES */
+                const nodesToRemove = graph.nodes.filter(e => { //TODO make filter-outer
+                    return e.id.substring(0, 1).toLowerCase() === 'p';
+                });
+
+                const lesserNodes = graph.nodes.filter(n => !nodesToRemove.filter(rn => rn.id === n.id).length);
+                log(lesserNodes);
+                nodes = nodes.data(lesserNodes, n => n.id); //add key accessor function, so it updates in place
+                nodes.exit()
+                    .remove();
+                //nodes.merge(lesserNodes);
+
+                nodeLabels = nodeLabels.data(lesserNodes);
+                nodeLabels.exit()
+                    .remove();
+                //nodeLabels.merge(lesserNodes);
+                nodeLabels
+                    .text(d => d.id);
+
+
+                /* EDGES */
+//                log(graph.edges);
+                const edgesToRemove = graph.edges.filter(e => {
+                    //edges with source | target listed in nodesToRemove
+//                    console.log('***', e.source, e.target);
+//                    nodesToRemove.forEach(n => console.log(n.id));
+                    return !nodesToRemove.filter(n => e.source.id === n.id || e.target.id === n.id).length;
+                });
+//                log(edgesToRemove);
+
+                log(graph.edges);
+                const lesserEdges = graph.edges.filter(e => edgesToRemove.filter(re => {
+                    return re.source.id === e.source.id && re.target.id === e.target.id
+                        /*&&
+                        re.id === e.id &&
+                        re.id === e.id*/
+                }).length);
+                log(lesserEdges);
+
+                edges = edges.data(lesserEdges);
+                edges.exit()
+                    .remove();
+
+                edgeLabels = edgeLabels.data(lesserEdges);
+                edgeLabels.exit()
+                    .remove();
+
+
+                /* SIM */
+                simulation.nodes(lesserNodes);
+                simulation.force("link").links(lesserEdges);
+
+                simulation.restart();
+
+                log('*** UPDATED NODE LIST ***');
+                nodes.each(n => console.log(n.id));
             }
         }
 
