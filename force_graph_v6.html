@@ -162,7 +162,12 @@
 
     /*
     TODOS
-    - for linked nodes that have several edges, concatenate those edge labels.
+    / for linked nodes that have several edges, concatenate those edge labels.
+    - fix: right-clicking node to toggle "fixed" class removes focus. split function on removing focused and unfocused classes
+    - adaptive framerate for large number of nodes
+	- on resize, center the graph again
+	- add lines to visualize edges (in addition to paths) - will this be more efficient for visualization?
+	- add: node:mouseover: pop the hovered node
     - try if using lines instead of paths is better. and can you still have the arrowheads w/ path stroke=none?
     - index.js CSV to JSON converter: foreach edge: if node-target combo is present already, update existing's edge by concatenating the new edge.
      */
@@ -205,28 +210,8 @@
 
         /* INITIALIZATIONS */
 
-        //TODO: make this work
-        console.log('---DEFAULT EDGES---\n', data.edges);
-        let init = [1,2,3];
-        const localEdges = data.edges.reduce(function(accum, e, i, a){
-            const matchingEdges = a.filter(d => d.source === e.source && d.target === e.target);
-            if (matchingEdges.length === 1) { //unique Source-Target pair
-                accum.push(e);
-                return accum;
-            }
-
-            const firstIndexOfE = matchingEdges.indexOf(e);
-            if (firstIndexOfE === i) {
-                return accum;
-            }
-
-            a[firstIndexOfE].label += ', ' + e.label;
-            return accum;
-        }, init);
-        console.log('+++LOCAL EDGES+++\n', localEdges);
-
-
-        const linkedNodes = data.edges
+        const graph = cloneGraph(data); //make independent local copy
+        const linkedNodes = graph.edges
             .map(d => (d.source + "," + d.target))
             .filter((d, i, a) => i === a.indexOf(d));
 
@@ -242,17 +227,17 @@
         const optimizer = new Optimizer(RENDER_FRAMES_TO_SKIP);
 
         simulation
-            .nodes(data.nodes)
+            .nodes(graph.nodes)
             .on("tick", ticked);
 
         simulation.force("link")
-            .links(data.edges);
+            .links(graph.edges);
 
         /* DRAW NODES AND EDGES */
 
         //Draw Paths for the Edges
         const edges = chartArea.selectAll("." + classnames.edge)
-            .data(data.edges)
+            .data(graph.edges)
             .enter()
             .append('path')
             .style("pointer-events", "none")
@@ -262,7 +247,7 @@
             });
 
         const edgeLabels = chartArea.selectAll("." + classnames.edgeLabel)
-            .data(data.edges)
+            .data(graph.edges)
             .enter()
             .append("text")
             .style("pointer-events", "none")
@@ -293,7 +278,7 @@
 
         //Draw Circles for the Nodes
         const nodes = chartArea.selectAll("." + classnames.node)
-            .data(data.nodes)
+            .data(graph.nodes)
             .enter().append("circle")
             .attrs({
                     "class": classnames.node,
@@ -321,7 +306,7 @@
         });
 
         const nodeLabels = chartArea.selectAll("." + classnames.nodeLabel)
-            .data(data.nodes)
+            .data(graph.nodes)
             .enter().append("text")
             .attrs({
                     "class": classnames.nodeLabel,
@@ -335,7 +320,11 @@
             focusNeighborsOf(d);
             unfocusNonNeighborsOf(d);
         });
-        nodes.on("mouseout", removeFocusAndUnfocusClasses);
+        //nodes.on("mouseout", removeFocusAndUnfocusClasses);
+        nodes.on("mouseout", d => {
+            console.log('*** mouseout ***');
+            removeFocusAndUnfocusClasses(d); //TODO: split into 2. remove focus on mouseout only
+        });
 
         nodes.on("mousedown", function(d) {
             d3.event.stopPropagation();
@@ -344,7 +333,15 @@
             unfocusNonNeighborsOf(d);
         });
 
-        d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
+        //d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
+        d3.select(window).on("mouseup", d => {
+            log('*** mouseup ***');
+            removeFocusAndUnfocusClasses(d);
+        });
+
+        function log(msg){
+            console.log(msg);
+        }
 
         /* SETUP ZOOM BEHAVIOR */
 
@@ -556,6 +553,31 @@
         }
 
         //convenience/utility functions
+        function cloneGraph(data){
+            return {
+                nodes: JSON.parse(JSON.stringify(data.nodes)), //deep copy
+                edges: reduceEdgeLabels(JSON.parse(JSON.stringify(data.edges))) //deep copy and concat labels of same edges
+            };
+
+            function reduceEdgeLabels(edges){
+                return edges.reduce(function(accum, e){
+                    const matchingEdges = accum.filter(d => d.source === e.source && d.target === e.target);
+                    if (!matchingEdges.length) {
+                        const clone = {
+                            source: e.source,
+                            target: e.target,
+                            label: e.label
+                        };
+                        accum.push(clone);
+                        return accum;
+                    }
+
+                    matchingEdges[0].label += ', ' + e.label;
+                    return accum;
+                }, [])
+            }
+        }
+
         function isConnected(a, b) {
             return linkedNodes.indexOf(a.index + "," + b.index) >= 0 ||
                 linkedNodes.indexOf(b.index + "," + a.index) >= 0 ||
