@@ -230,7 +230,7 @@
             edges: graphMaster.edges.filter(d => true)
         };
 
-        let linkedNodes = getLinkedNodes(graphCurrentSelection.edges);
+        let linkedNodes = getLinkedNodesByIndex(graphCurrentSelection.edges);
         log(linkedNodes);
 
         /* DRAW NODES AND EDGES */
@@ -576,9 +576,16 @@
 
         //bb
         function isConnected(a, b) {
-            return linkedNodes.indexOf(a.index + "," + b.index) >= 0 ||
-                linkedNodes.indexOf(b.index + "," + a.index) >= 0 ||
-                a.index === b.index;
+
+            if (linkedNodes.indexOf(a.id + "," + b.id) >= 0 ||
+                linkedNodes.indexOf(b.id + "," + a.id) >= 0 ||
+                a.id === b.id) {
+                log('*** YES, isConnected ***\n', a.id, b.id);
+                return true;
+            }
+
+            log('*** NO, isNOTConnected ***\n', a.id, b.id);
+            return false;
         }
 
         function isNodeClassed(className, nodeIndex) {
@@ -593,18 +600,21 @@
             return 'url(#' + id + ')';
         }
 
-        function getLinkedNodes(edges){
+        function getLinkedNodesById(edges){
             return edges
-                .map(d => {
-                    if (d.source.index !== undefined){
-                        log ('if')
-                        return d.source.index + "," + d.target.index;
-                    }
-
-                    log('else')
-                    return d.source + "," + d.target;
-                })
+                .map(d => d.source.id + "," + d.target.id)
                 //.filter((d, i, a) => i === a.indexOf(d));
+        }
+
+        function getLinkedNodesByIndex(edges){
+            return edges
+                .map(d => getNodeIdFromIndex(d.source) + "," + getNodeIdFromIndex(d.target))
+                //.filter((d, i, a) => i === a.indexOf(d));
+        }
+
+        function getNodeIdFromIndex(index){
+            log('found', graphMaster.nodes[index].id, 'at', index);
+            return graphMaster.nodes[index].id;
         }
 
         //key press handler
@@ -663,8 +673,9 @@
             }
 
             /* rebuild list */
-            linkedNodes = getLinkedNodes(graphCurrentSelection.edges);
-            log(linkedNodes);
+            log(graphCurrentSelection.edges);
+            linkedNodes = getLinkedNodesById(graphCurrentSelection.edges);
+//            log(linkedNodes);
 
             redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
 
