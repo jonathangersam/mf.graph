@@ -22,7 +22,6 @@
         fill: orange;
     }
     .node.focused {
-        /* fill: red; */
         stroke: red;
         stroke-width: 1.5;
     }
@@ -231,15 +230,15 @@
         };
 
         let linkedNodes = getLinkedNodesByIndex(graphCurrentSelection.edges);
-        log(linkedNodes);
+//        log(linkedNodes);
 
         /* DRAW NODES AND EDGES */
         createArrowheads();
 
-        let edges = chartArea.append('g').attr('class', 'edgelayer').selectAll("." + classnames.edge);
-        let edgeLabels = chartArea.append('g').attr('class', 'edgelabelslayer').selectAll("." + classnames.edgeLabel);
-        let nodes = chartArea.append('g').attr('class', 'nodelayer').selectAll("." + classnames.node);
-        let nodeLabels = chartArea.append('g').attr('class', 'nodelabelslayer').selectAll("." + classnames.nodeLabel);
+        let edges = chartArea.append('g').attr('class', 'layeredges').selectAll("." + classnames.edge);
+        let edgeLabels = chartArea.append('g').attr('class', 'layeredgelabels').selectAll("." + classnames.edgeLabel);
+        let nodes = chartArea.append('g').attr('class', 'layernodes').selectAll("." + classnames.node);
+        let nodeLabels = chartArea.append('g').attr('class', 'layernodelabels').selectAll("." + classnames.nodeLabel);
 
         redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
 
@@ -378,6 +377,7 @@
         }
 
         function handleMouseOver (d) {
+            log('mouse over', d.id, 'at', d.index);
             d3.select(this)
                 .attr('r', NODE_RADIUS + NODE_POP_SIZE)
                 .transition()
@@ -405,9 +405,14 @@
         //functions for changing css classes
         function fixEdgesConnectedTo(subjectNode) {
             //curry function by supplying 1st arg. for convenience.
+            //aa
+            log('subjectNode:',subjectNode);
+            log(1);
             const isFixed = isNodeClassed.bind(null, classnames.fixed);
+            log(2);
             const isSubjectFixed = isFixed(subjectNode.index);
 
+            log (3);
             //toggle-on classname='fixed' if the Edge is between 2 fixed nodes
             edges.filter(d => d.source.index === subjectNode.index) //edges w SubjectNode as the Source
                 .classed(classnames.fixed, d => isFixed(d.target.index) && isSubjectFixed);
@@ -426,20 +431,28 @@
 
         function flagReachableNodes() {
             //curry function by supplying 1st arg. for convenience.
+            log('once');
             const isFixed = isNodeClassed.bind(null, classnames.fixed);
+            log('twice');
 
             //initially remove all "reachable" class tags
             nodes.classed(classnames.reachable, false);
 
+            log('three');
             edges.filter(d => isFixed(d.source.index)) //edges whose Source Node is Fixed
                 .each(function (d) {
+                    log('found a 3');
                     selectNodeByIndex(d.target.index).classed(classnames.reachable, true);
                 });
 
+            log('four');
+            log('edges');
             edges.filter(d => isFixed(d.target.index)) //edges whose Target Node is Fixed
                 .each(function (d) {
+                    log('found a 4');
                     selectNodeByIndex(d.source.index).classed(classnames.reachable, true);
                 });
+            log('FIN');
 
             //updateEdgeArrowheads();
         }
@@ -447,8 +460,7 @@
         function focusNeighborsOf(subjectNode) {
             svg.style("cursor", "pointer");
 
-            //aa
-            log('subjNode=', subjectNode.id, 'idx', subjectNode.index);
+//            log('subjNode=', subjectNode.id, 'idx', subjectNode.index);
 
             nodes.classed(classnames.focused, n => isConnected(n, subjectNode));
             nodeLabels.classed(classnames.focused, n => isConnected(n, subjectNode));
@@ -574,17 +586,13 @@
             console.log.apply(null, arguments);
         }
 
-        //bb
         function isConnected(a, b) {
-
             if (linkedNodes.indexOf(a.id + "," + b.id) >= 0 ||
                 linkedNodes.indexOf(b.id + "," + a.id) >= 0 ||
                 a.id === b.id) {
-                log('*** YES, isConnected ***\n', a.id, b.id);
                 return true;
             }
 
-            log('*** NO, isNOTConnected ***\n', a.id, b.id);
             return false;
         }
 
@@ -613,7 +621,7 @@
         }
 
         function getNodeIdFromIndex(index){
-            log('found', graphMaster.nodes[index].id, 'at', index);
+//            log('found', graphMaster.nodes[index].id, 'at', index);
             return graphMaster.nodes[index].id;
         }
 
@@ -622,7 +630,7 @@
         let showP = true;
 
         function handleKeypress() {
-            console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
+//            console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
             if (d3.event.keyCode === 32) { //spacebar
                 simulation.stop();
             }
@@ -673,9 +681,8 @@
             }
 
             /* rebuild list */
-            log(graphCurrentSelection.edges);
+//            log(graphCurrentSelection.edges);
             linkedNodes = getLinkedNodesById(graphCurrentSelection.edges);
-//            log(linkedNodes);
 
             redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
 
@@ -683,10 +690,9 @@
             restartSimulation(graphCurrentSelection.nodes, graphCurrentSelection.edges, timings.nodeExit);
         }
 
-        //bb
         function redraw(newNodes, newEdges){
             //Update edges
-            edges = edges.data(newEdges, edge => edge.source.index + ',' + edge.target.index);
+            edges = edges.data(newEdges, edge => edge.source.id + ',' + edge.target.id);
 
             edges.exit()
                 .transition()
@@ -704,8 +710,10 @@
 
             updateEdgeArrowheads();
 
+            log('REDRAW() EDGES:\n', edges);
+
             //Update edge labels
-            edgeLabels = edgeLabels.data(newEdges, edge => edge.source.index + ',' + edge.target.index);
+            edgeLabels = edgeLabels.data(newEdges, edge => edge.source.id + ',' + edge.target.id);
 
             edgeLabels.exit()
                 .transition()
@@ -716,12 +724,14 @@
                 .append("text")
                 .style("pointer-events", "none")
                 .attrs({
-                    'class': 'edgelabel',
-                    'id': (d,i) => 'edgelabel' + i
+//                    'class': 'edgelabel',
+//                    'id': (d,i) => 'edgelabel' + i
                 })
                 .append('textPath')
                 .style("pointer-events", "none")
                 .attrs({
+                    "class": "edgelabel",
+                    "id": (d,i) => classnames.edgeLabel + i,
                     "xlink:href": (d, i) => '#edge' + i,
                     "startOffset": "50%"
                 })
@@ -782,7 +792,7 @@
             setTimeout(function() {
                 simulation.nodes(newNodes);
                 simulation.force("link").links(newEdges);
-                simulation.restart();
+                simulation.alpha(1).restart(); //alpha so joins don't make the screen jump
             }, delay)
         }
 
