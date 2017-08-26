@@ -64,7 +64,7 @@
     }
 
     .unfocused {
-        opacity: 0.2
+        opacity: 0.5
     }
 
     text.unfocused {
@@ -192,8 +192,13 @@
         const GRAPH_CHARGE = -100;
         const NODE_RADIUS = 20;
         const NODE_POP_SIZE = 5;
-        const NODE_POP_DURATION = 400;
         const EDGE_ARROWHEAD_OFFSET = 30; //distance from tip of an edge. adjust based on node radius
+
+        const timings = {
+            nodePop: 400,
+            nodeExit: 200,
+            nodeEnter: 800
+        };
 
         //special classnames
         const classnames = {
@@ -217,11 +222,26 @@
 
         /* INITIALIZATIONS */
 
-        const graph = cloneGraph(data); //make independent local copy
+        //make independent local copy
+        const graphMaster = cloneGraph(data);
 
-        const linkedNodes = graph.edges
-            .map(d => (d.source + "," + d.target))
-            .filter((d, i, a) => i === a.indexOf(d));
+        let graphCurrentSelection = {
+            nodes: graphMaster.nodes.filter(d => true),
+            edges: graphMaster.edges.filter(d => true)
+        };
+
+        let linkedNodes = getLinkedNodes(graphCurrentSelection.edges);
+        log(linkedNodes);
+
+        /* DRAW NODES AND EDGES */
+        createArrowheads();
+
+        let edges = chartArea.append('g').attr('class', 'edgelayer').selectAll("." + classnames.edge);
+        let edgeLabels = chartArea.append('g').attr('class', 'edgelabelslayer').selectAll("." + classnames.edgeLabel);
+        let nodes = chartArea.append('g').attr('class', 'nodelayer').selectAll("." + classnames.node);
+        let nodeLabels = chartArea.append('g').attr('class', 'nodelabelslayer').selectAll("." + classnames.nodeLabel);
+
+        redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
 
         /* SETUP SIMULATION */
 
@@ -232,11 +252,12 @@
             .force("charge", d3.forceManyBody().strength(GRAPH_CHARGE))
             .force("center", d3.forceCenter(w / 2, h / 2)); //todo: convert to +svg.attr("width"), +svg.attr("width")
 
-        //const framerateController = new AdaptiveFramerate(ADAPTIVERENDERER_TICKSKIP_MAXFRAMES, ADAPTIVERENDERER_TICKSKIP_MAXWAIT);
+        //const framerateController =
+        // new AdaptiveFramerate(ADAPTIVERENDERER_TICKSKIP_MAXFRAMES, ADAPTIVERENDERER_TICKSKIP_MAXWAIT);
         let skipFrames = ADAPTIVERENDERER_TICKSKIP_MAXFRAMES;
 
         simulation
-            .nodes(graph.nodes)
+            .nodes(graphCurrentSelection.nodes)
             .on("tick", d => {
 //              console.log('ticked at', new Date());
 //              if (!framerateController.isTimeForUpdate()) {
@@ -252,132 +273,21 @@
             });
 
         simulation.force("link")
-            .links(graph.edges);
+            .links(graphCurrentSelection.edges);
 
-        /* DRAW NODES AND EDGES */
-
-        //Draw Paths for the Edges
-        let edges = chartArea.selectAll("." + classnames.edge)
-            .data(graph.edges)
-            .enter()
-            .append('path')
-            .style("pointer-events", "none")
-            .attrs({
-                'class': 'edge',
-                'id': (d,i) => 'edge' + i
-            });
-
-        let edgeLabels = chartArea.selectAll("." + classnames.edgeLabel)
-            .data(graph.edges)
-            .enter()
-            .append("text")
-            .style("pointer-events", "none")
-            .attrs({
-                    'class': 'edgelabel',
-                    'id': (d,i) => 'edgelabel' + i
-                });
-
-        edgeLabels.append('textPath')
-            .style("pointer-events", "none")
-            .attrs({
-                    "xlink:href": (d, i) => '#edge' + i,
-                    "startOffset": "50%"
-                })
-            .text(d => d.label);
-
-        //Create Markers for the Edge Arrowheads
-        if (SHOW_EDGE_ARROWHEADS) {
-            //edges.attr('marker-end', 'url(#' + ids.arrowheadNeutral + ')');
-
-            createArrowheadMarker(classnames.arrowhead, ids.arrowheadNeutral);
-            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFocused);
-            createArrowheadMarker(classnames.arrowhead, ids.arrowheadUnfocused);
-            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFixed);
-
-            updateEdgeArrowheads();
-        }
-
-        //Draw Circles for the Nodes
-        let nodes = chartArea.selectAll("." + classnames.node)
-            .data(graph.nodes)
-            .enter().append("circle")
-            .attrs({
-                    "class": classnames.node,
-                    "r": NODE_RADIUS,
-                    "id": (d,i) => classnames.node + i
-                })
-            .call(d3.drag()
-                    .on("start", dragstarted)
-                    .on("drag", dragged)
-                    .on("end", dragended)
-            );
-
-        nodes.on('contextmenu', function (d) { //right-click
-            d3.event.preventDefault(); //prevent the browser's normal right-click menu
-
-            const wasThisNodeFixed = d3.select(this).classed(classnames.fixed);
-            d3.select(this).classed(classnames.fixed, !wasThisNodeFixed);
-            fixEdgesConnectedTo(d);
-            flagReachableNodes(d);
-
-            //un/fix node position
-            d.fx = wasThisNodeFixed ? null : d.x;
-            d.fy = wasThisNodeFixed ? null : d.y;
-
-        });
-
-        let nodeLabels = chartArea.selectAll("." + classnames.nodeLabel)
-            .data(graph.nodes)
-            .enter().append("text")
-            .attrs({
-                    "class": classnames.nodeLabel,
-                    "dy": ".35em"
-                })
-            .text(d => d.id);
-
-        /* SETUP MOUSE BEHAVIOR */
-
-        nodes.on("mouseover", function (d) {
-            d3.select(this)
-                .attr('r', NODE_RADIUS + NODE_POP_SIZE)
-                .transition()
-                .duration(NODE_POP_DURATION)
-                .attr('r', NODE_RADIUS);
-
-
-            focusNeighborsOf(d);
-            unfocusNonNeighborsOf(d);
-        });
-        //nodes.on("mouseout", removeFocusAndUnfocusClasses);
-        nodes.on("mouseout", d => {
-            svg.style("cursor","move");
-            removeFocused(d);
-            removeUnfocused(d);
-        });
-
-        nodes.on("mousedown", function(d) {
-            d3.event.stopPropagation();
-
-            focusNeighborsOf(d);
-            unfocusNonNeighborsOf(d);
-        });
 
         //d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
         d3.select(window)
-            //.on("resize", handleResize)
+        //.on("resize", handleResize)
             .on("keydown", handleKeypress);
-
-        function log(msg){
-            console.log(msg);
-        }
 
         /* SETUP ZOOM BEHAVIOR */
 
         const zoomHandler = d3.zoom()
             .scaleExtent([-Infinity,Infinity])
             .on("zoom", () => {
-                    chartArea.attr("transform", d3.event.transform)
-                });
+                chartArea.attr("transform", d3.event.transform)
+            });
 
         zoomHandler(svg);
 
@@ -423,7 +333,7 @@
             }
         }
 
-        //Node mouse-drag behavior
+        //Mouse interaction functions
         function dragstarted(d) {
             if (!d3.event.active) {
                 simulation.alphaTarget(0.3).restart();
@@ -452,6 +362,44 @@
                 d.fx = null;
                 d.fy = null;
             }
+        }
+
+        function handleRightClick(d) { //right-click
+            d3.event.preventDefault(); //prevent the browser's normal right-click menu
+
+            const wasThisNodeFixed = d3.select(this).classed(classnames.fixed);
+            d3.select(this).classed(classnames.fixed, !wasThisNodeFixed);
+            fixEdgesConnectedTo(d);
+            flagReachableNodes(d);
+
+            //un/fix node position
+            d.fx = wasThisNodeFixed ? null : d.x;
+            d.fy = wasThisNodeFixed ? null : d.y;
+        }
+
+        function handleMouseOver (d) {
+            d3.select(this)
+                .attr('r', NODE_RADIUS + NODE_POP_SIZE)
+                .transition()
+                .duration(timings.nodePop)
+                .attr('r', NODE_RADIUS);
+
+
+            focusNeighborsOf(d);
+            unfocusNonNeighborsOf(d);
+        }
+
+        function handleMouseOut (d) {
+            svg.style("cursor","move");
+            removeFocused(d);
+            removeUnfocused(d);
+        }
+
+        function handleMouseDown(d) {
+            d3.event.stopPropagation();
+
+            focusNeighborsOf(d);
+            unfocusNonNeighborsOf(d);
         }
 
         //functions for changing css classes
@@ -499,14 +447,17 @@
         function focusNeighborsOf(subjectNode) {
             svg.style("cursor", "pointer");
 
-            nodes.classed(classnames.focused, d => isConnected(d, subjectNode));
-            nodeLabels.classed(classnames.focused, d => isConnected(d, subjectNode));
+            //aa
+            log('subjNode=', subjectNode.id, 'idx', subjectNode.index);
 
-            edges.classed(classnames.focused, d =>
-                (d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            nodes.classed(classnames.focused, n => isConnected(n, subjectNode));
+            nodeLabels.classed(classnames.focused, n => isConnected(n, subjectNode));
+
+            edges.classed(classnames.focused, e =>
+                (e.source.index === subjectNode.index || e.target.index === subjectNode.index)
             );
-            edgeLabels.classed(classnames.focused, d =>
-                (d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            edgeLabels.classed(classnames.focused, e =>
+                (e.source.index === subjectNode.index || e.target.index === subjectNode.index)
             );
 
             updateEdgeArrowheads();
@@ -544,7 +495,22 @@
             updateEdgeArrowheads();
         }
 
+        function createArrowheads() {
+            if (!SHOW_EDGE_ARROWHEADS) {
+                return;
+            }
+
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadNeutral);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFocused);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadUnfocused);
+            createArrowheadMarker(classnames.arrowhead, ids.arrowheadFixed);
+        }
+
         function updateEdgeArrowheads() {
+            if (!SHOW_EDGE_ARROWHEADS) {
+                return;
+
+            }
             //use the arrowhead that matches the edge
             edges.each(function (){
                 const thisEdge = d3.select(this); //convenience var
@@ -604,6 +570,11 @@
             }
         }
 
+        function log(msg){
+            console.log.apply(null, arguments);
+        }
+
+        //bb
         function isConnected(a, b) {
             return linkedNodes.indexOf(a.index + "," + b.index) >= 0 ||
                 linkedNodes.indexOf(b.index + "," + a.index) >= 0 ||
@@ -622,6 +593,24 @@
             return 'url(#' + id + ')';
         }
 
+        function getLinkedNodes(edges){
+            return edges
+                .map(d => {
+                    if (d.source.index !== undefined){
+                        log ('if')
+                        return d.source.index + "," + d.target.index;
+                    }
+
+                    log('else')
+                    return d.source + "," + d.target;
+                })
+                //.filter((d, i, a) => i === a.indexOf(d));
+        }
+
+        //key press handler
+
+        let showP = true;
+
         function handleKeypress() {
             console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
             if (d3.event.keyCode === 32) { //spacebar
@@ -631,63 +620,159 @@
             if (d3.event.keyCode === 80) { //p
                 d3.event.stopPropagation();
 
-                /* NODES */
-                const nodesToRemove = graph.nodes.filter(e => { //TODO make filter-outer
+                showP = !showP;
+
+                toggleNodes(f, showP);
+
+                function f(e){
                     return e.id.substring(0, 1).toLowerCase() === 'p';
-                });
-
-                const lesserNodes = graph.nodes.filter(n => !nodesToRemove.filter(rn => rn.id === n.id).length);
-                log(lesserNodes);
-                nodes = nodes.data(lesserNodes, n => n.id); //add key accessor function, so it updates in place
-                nodes.exit()
-                    .remove();
-                //nodes.merge(lesserNodes);
-
-                nodeLabels = nodeLabels.data(lesserNodes);
-                nodeLabels.exit()
-                    .remove();
-                //nodeLabels.merge(lesserNodes);
-                nodeLabels
-                    .text(d => d.id);
-
-
-                /* EDGES */
-//                log(graph.edges);
-                const edgesToRemove = graph.edges.filter(e => {
-                    //edges with source | target listed in nodesToRemove
-//                    console.log('***', e.source, e.target);
-//                    nodesToRemove.forEach(n => console.log(n.id));
-                    return !nodesToRemove.filter(n => e.source.id === n.id || e.target.id === n.id).length;
-                });
-//                log(edgesToRemove);
-
-                log(graph.edges);
-                const lesserEdges = graph.edges.filter(e => edgesToRemove.filter(re => {
-                    return re.source.id === e.source.id && re.target.id === e.target.id
-                        /*&&
-                        re.id === e.id &&
-                        re.id === e.id*/
-                }).length);
-                log(lesserEdges);
-
-                edges = edges.data(lesserEdges);
-                edges.exit()
-                    .remove();
-
-                edgeLabels = edgeLabels.data(lesserEdges);
-                edgeLabels.exit()
-                    .remove();
-
-
-                /* SIM */
-                simulation.nodes(lesserNodes);
-                simulation.force("link").links(lesserEdges);
-
-                simulation.restart();
-
-                log('*** UPDATED NODE LIST ***');
-                nodes.each(n => console.log(n.id));
+                }
             }
+        }
+
+        function isEdgeInNodelist(edge, nodes){
+            return nodes.filter(node => node.id === edge.source.id || node.id === edge.target.id).length;
+        }
+
+        function isNodeInNodelist(subjectNode, nodes){
+            return nodes.filter(node => node.id === subjectNode.id).length;
+        }
+
+        function isEdgeInEdgeList(subjectEdge, edges){
+            return edges.filter(edge =>
+                edge.source.id === subjectEdge.source.id && edge.target.id === subjectEdge.target.id
+            ).length;
+        }
+
+        function toggleNodes(filterFunction, showNodes){
+            //get nodes and edges from the master
+            const nodesToToggle = graphMaster.nodes.filter(filterFunction);
+            const edgesToToggle = graphMaster.edges.filter(edge =>
+                showNodes ? isEdgeInNodelist(edge, nodesToToggle) : !isEdgeInNodelist(edge, nodesToToggle));
+
+            //add/remove items-to-toggle to the current selection
+            if (showNodes){
+                graphCurrentSelection.nodes = graphCurrentSelection.nodes.concat(nodesToToggle);
+                graphCurrentSelection.edges = graphCurrentSelection.edges.concat(edgesToToggle);
+            } else {
+                graphCurrentSelection.nodes =
+                    graphCurrentSelection.nodes.filter(node => !isNodeInNodelist(node, nodesToToggle));
+
+                graphCurrentSelection.edges =
+                    graphCurrentSelection.edges.filter(edge => isEdgeInEdgeList(edge, edgesToToggle));
+            }
+
+            /* rebuild list */
+            linkedNodes = getLinkedNodes(graphCurrentSelection.edges);
+            log(linkedNodes);
+
+            redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
+
+            //Restart force simulation after transitions have completed
+            restartSimulation(graphCurrentSelection.nodes, graphCurrentSelection.edges, timings.nodeExit);
+        }
+
+        //bb
+        function redraw(newNodes, newEdges){
+            //Update edges
+            edges = edges.data(newEdges, edge => edge.source.index + ',' + edge.target.index);
+
+            edges.exit()
+                .transition()
+                .duration(timings.nodeExit)
+                .remove();
+
+            edges = edges.enter()
+                .append('path')
+                .style("pointer-events", "none")
+                .attrs({
+                    'class': 'edge',
+                    'id': (d,i) => 'edge' + i
+                })
+                .merge(edges);
+
+            updateEdgeArrowheads();
+
+            //Update edge labels
+            edgeLabels = edgeLabels.data(newEdges, edge => edge.source.index + ',' + edge.target.index);
+
+            edgeLabels.exit()
+                .transition()
+                .duration(timings.nodeExit)
+                .remove();
+
+            edgeLabels = edgeLabels.enter()
+                .append("text")
+                .style("pointer-events", "none")
+                .attrs({
+                    'class': 'edgelabel',
+                    'id': (d,i) => 'edgelabel' + i
+                })
+                .append('textPath')
+                .style("pointer-events", "none")
+                .attrs({
+                    "xlink:href": (d, i) => '#edge' + i,
+                    "startOffset": "50%"
+                })
+                .text(d => d.label)
+                .merge(edgeLabels);
+
+            //Update nodes
+            nodes = nodes.data(newNodes, node => node.id);
+
+            nodes.exit()
+                .transition()
+                .duration(timings.nodeExit)
+                .attr('r', 0)
+                .remove();
+
+            nodes = nodes.enter()
+                .append("circle")
+                .attrs({
+                    "class": classnames.node,
+                    "r": '1',
+                    "id": (d,i) => classnames.node + i
+                })
+                .on('contextmenu', handleRightClick)
+                .on("mouseover", handleMouseOver)
+                .on("mouseout", handleMouseOut)
+                .on("mousedown", handleMouseDown)
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended)
+                )
+                .merge(nodes);
+
+            nodes.transition()
+                .duration(timings.nodeEnter)
+                .ease(d3.easeBounce)
+                .attr('r', NODE_RADIUS);
+
+            //Update node labels
+            nodeLabels = nodeLabels.data(newNodes, node => node.id);
+
+            nodeLabels.exit()
+                .remove();
+
+            nodeLabels = nodeLabels.enter()
+                .append("text")
+                .attrs({
+                    "class": classnames.nodeLabel,
+                    "dy": ".35em"
+                })
+                .text(d => d.id)
+                .merge(nodeLabels)
+
+            //nodeLabels.text(nodeLabel => nodeLabel.id);
+        }
+
+        function restartSimulation(newNodes, newEdges, delay) {
+            setTimeout(function() {
+                simulation.nodes(newNodes);
+                simulation.force("link").links(newEdges);
+                simulation.restart();
+            }, delay)
         }
 
         //if tick rate is too far apart, adapt the target framerate by backing off render calls
