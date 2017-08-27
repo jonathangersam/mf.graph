@@ -157,9 +157,12 @@
 
     /*
     TODOS
-    - extract node-removal code into own function
+    / extract node-removal code into own function
+    / use masterGraph index as ID
+    - FP-ize the filters
     - the filter-out pattern should be extracted to a higher-order function
-    - update linkedNodes after removing nodes
+    - remove Edge ID concept. use their array index instead
+    / update linkedNodes after removing nodes
     - try restoring of nodes and links
     / for linked nodes that have several edges, concatenate those edge labels.
     / fix: right-clicking node to toggle "fixed"d class removes focus. split function on removing focused and unfocused classes
@@ -225,9 +228,6 @@
             edges: graphMaster.edges.filter(d => true)
         };
 
-        let linkedNodes = getNodesLinkedByEdges1(graphCurrentSelection.edges);
-        log('***linked nodes***\n', linkedNodes);
-
         /* DRAW NODES AND EDGES */
         createArrowheads();
 
@@ -269,7 +269,6 @@
 
         simulation.force("link")
             .links(graphCurrentSelection.edges);
-
 
         //d3.select(window).on("mouseup", removeFocusAndUnfocusClasses);
         d3.select(window)
@@ -373,7 +372,7 @@
         }
 
         function handleMouseOver (d) {
-            log('mouse over', d.id, 'at', d.index);
+            log('mouse over() d.id=' + d.id, 'at d.i=' + d.index, 'd_htmlID=' + d3.select(this).attr("id"), ' index in master=' + getNodeIndexFromMaster(d));
             d3.select(this)
                 .attr('r', NODE_RADIUS + NODE_POP_SIZE)
                 .transition()
@@ -401,86 +400,75 @@
         //functions for changing css classes
         function fixEdgesConnectedTo(subjectNode) {
             //curry function by supplying 1st arg. for convenience.
-            //aa
-            log('subjectNode:',subjectNode);
-            log(1);
             const isFixed = isNodeClassed.bind(null, classnames.fixed);
-            log(2);
-            const isSubjectFixed = isFixed(subjectNode.id);
+            const isSubjectFixed = isFixed(subjectNode);
 
-            log (3);
-            log('***EDGES***\n', edges);
             //toggle-on classname='fixed' if the Edge is between 2 fixed nodes
-            edges.filter(d => d.source.index === subjectNode.index) //edges w SubjectNode as the Source
-                .classed(classnames.fixed, d => isFixed(d.target.index) && isSubjectFixed);
+            edges.filter(edge => edge.source === subjectNode) //edges w SubjectNode as the Source
+                .classed(classnames.fixed, edge => isFixed(edge.target) && isSubjectFixed);
 
-            edges.filter(d => d.target.index === subjectNode.index) //edges targeting the SubjectNode
-                .classed(classnames.fixed, d => isFixed(d.source.index) && isSubjectFixed);
+            edges.filter(edge => edge.target === subjectNode) //edges targeting the SubjectNode
+                .classed(classnames.fixed, edge => isFixed(edge.source) && isSubjectFixed);
 
-            edgeLabels.filter(d => d.source.index === subjectNode.index) //edges w SubjectNode as the Source
-                .classed(classnames.fixed, d => isFixed(d.target.index) && isSubjectFixed);
+            edgeLabels.filter(edgeLabel => edgeLabel.source === subjectNode) //edges w SubjectNode as the Source
+                .classed(classnames.fixed, edgeLabel => isFixed(edgeLabel.target) && isSubjectFixed);
 
-            edgeLabels.filter(d => d.target.index === subjectNode.index) //edges targeting the SubjectNode
-                .classed(classnames.fixed, d => isFixed(d.source.index) && isSubjectFixed);
+            edgeLabels.filter(edgeLabel => edgeLabel.target === subjectNode) //edges targeting the SubjectNode
+                .classed(classnames.fixed, edgeLabel => isFixed(edgeLabel.source) && isSubjectFixed);
 
             updateEdgeArrowheads();
         }
 
         function flagReachableNodes() {
             //curry function by supplying 1st arg. for convenience.
-            log('once');
             const isFixed = isNodeClassed.bind(null, classnames.fixed);
-            log('twice');
 
             //initially remove all "reachable" class tags
             nodes.classed(classnames.reachable, false);
 
-            log('three');
-            edges.filter(edge => isFixed(edge.source.index)) //edges whose Source Node is Fixed
+            edges.filter(edge => isFixed(edge.source)) //edges whose Source Node is Fixed
                 .each(function (edge) {
-                    log('found a 3');
-                    selectNodeById(edge.target.index).classed(classnames.reachable, true);
+                    selectNode(edge.target).classed(classnames.reachable, true);
                 });
 
-            log('four');
-            log('edges');
-            edges.filter(edge => isFixed(edge.target.index)) //edges whose Target Node is Fixed
+            edges.filter(edge => isFixed(edge.target)) //edges whose Target Node is Fixed
                 .each(function (edge) {
-                    log('found a 4');
-                    selectNodeById(edge.source.index).classed(classnames.reachable, true);
+                    selectNode(edge.source).classed(classnames.reachable, true);
                 });
-            log('FIN');
 
             //updateEdgeArrowheads();
         }
 
+        //aa
         function focusNeighborsOf(subjectNode) {
             svg.style("cursor", "pointer");
 
-//            log('subjNode=', subjectNode.id, 'idx', subjectNode.index);
+            const isConnectedToSubjectNode = areNodesConnected.bind(null, subjectNode);
 
-            nodes.classed(classnames.focused, n => isConnected(n, subjectNode));
-            nodeLabels.classed(classnames.focused, n => isConnected(n, subjectNode));
+            nodes.classed(classnames.focused, isConnectedToSubjectNode);
+            nodeLabels.classed(classnames.focused, isConnectedToSubjectNode);
 
-            edges.classed(classnames.focused, e =>
-                (e.source.index === subjectNode.index || e.target.index === subjectNode.index)
-            );
-            edgeLabels.classed(classnames.focused, e =>
-                (e.source.index === subjectNode.index || e.target.index === subjectNode.index)
-            );
+            const isSubjectNodeInEdge = edge => isNodeInEdge(edge, subjectNode);
+            edges.classed(classnames.focused, isSubjectNodeInEdge);
+            edgeLabels.classed(classnames.focused, isSubjectNodeInEdge);
 
             updateEdgeArrowheads();
         }
 
         function unfocusNonNeighborsOf(subjectNode) {
-            nodes.classed(classnames.unfocused, d => !isConnected(d, subjectNode));
-            nodeLabels.classed(classnames.unfocused, d => !isConnected(d, subjectNode));
+            const isUnconnectedToSubjectNode = node => !areNodesConnected(subjectNode, node);
 
-            edges.classed(classnames.unfocused, d =>
-                !(d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            nodes.classed(classnames.unfocused, isUnconnectedToSubjectNode);
+            nodeLabels.classed(classnames.unfocused, isUnconnectedToSubjectNode);
+
+            //TODO: next
+            //const isSubjectNodeInEdge = edge => isNodeInEdge(edge, subjectNode);
+
+            edges.classed(classnames.unfocused, edge =>
+                !(edge.source === subjectNode || subjectNode === edge.target)
             );
-            edgeLabels.classed(classnames.unfocused, d =>
-                !(d.source.index === subjectNode.index || d.target.index === subjectNode.index)
+            edgeLabels.classed(classnames.unfocused, edgeLabel =>
+                !(edgeLabel.source === subjectNode || subjectNode === edgeLabel.target)
             );
 
             updateEdgeArrowheads();
@@ -518,12 +506,12 @@
         function updateEdgeArrowheads() {
             if (!SHOW_EDGE_ARROWHEADS) {
                 return;
-
             }
             //use the arrowhead that matches the edge
             edges.each(function (){
                 const thisEdge = d3.select(this); //convenience var
 
+                //select by priority
                 if (thisEdge.classed(classnames.focused)){
                     thisEdge.attr('marker-end', formatMarkerUrl(ids.arrowheadFocused));
                 } else if (thisEdge.classed(classnames.fixed)) {
@@ -585,43 +573,29 @@
             console.log.apply(null, arguments);
         }
 
-        function isConnected(a, b) {
-            if (linkedNodes.indexOf(a.id + "," + b.id) >= 0 ||
-                linkedNodes.indexOf(b.id + "," + a.id) >= 0 ||
-                a.id === b.id) {
-                return true;
-            }
-
-            return false;
+        //bb
+        // filters
+        function areNodesConnected(a, b) {
+            const doAAndBBelongToEdge = doNodesBelongInEdge.bind(null, a, b);
+            return graphCurrentSelection.edges.filter(doAAndBBelongToEdge).length;
         }
 
-        function isNodeClassed(className, nodeId) {
-            return d3.select("#node" + nodeId).classed(className);
+        function doNodesBelongInEdge(node1, node2, edge){
+            return (node1 === edge.source && edge.target === node2) ||
+                (node2 === edge.source && edge.target === node1) ||
+                node1 === node2;
         }
 
-        function selectNodeById(nodeId) {
-            return d3.select("#node" + nodeId);
+        function isNodeClassed(className, node) {
+            return d3.select("#node" + getNodeIndexFromMaster(node)).classed(className);
+        }
+
+        function selectNode(node) {
+            return d3.select("#node" + getNodeIndexFromMaster(node));
         }
 
         function formatMarkerUrl(id){
             return 'url(#' + id + ')';
-        }
-
-        function getNodesLinkedByEdges2(edges){
-            return edges
-                .map(d => d.source.id + "," + d.target.id)
-                //.filter((d, i, a) => i === a.indexOf(d));
-        }
-
-        function getNodesLinkedByEdges1(edges){
-            return edges
-                .map(edge => getNodeIdFromIndex(edge.source) + "," + getNodeIdFromIndex(edge.target))
-                //.filter((d, i, a) => i === a.indexOf(d));
-        }
-
-        function getNodeIdFromIndex(index){
-//            log('found', graphMaster.nodes[index].id, 'at', index);
-            return graphMaster.nodes[index].id;
         }
 
         //key press handler
@@ -629,43 +603,63 @@
         let showP = true;
 
         function handleKeypress() {
-//            console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
-            if (d3.event.keyCode === 32) { //spacebar
+            const keycode = {
+                l: 76,
+                n: 78,
+                e: 69,
+                p: 80,
+                space: 32
+            };
+
+            console.log('Key pressed: d3.event.keyCode=' + d3.event.keyCode);
+
+            if (d3.event.keyCode === keycode.space) {
                 simulation.stop();
             }
 
-            if (d3.event.keyCode === 80) { //p
+            if (d3.event.keyCode === keycode.n) {
+                log('*** selected nodes ***\n', graphCurrentSelection.nodes);
+            }
+
+            if (d3.event.keyCode === keycode.e) {
+                log('*** selected edges ***\n', graphCurrentSelection.edges);
+            }
+
+            if (d3.event.keyCode === keycode.p) { //p
                 d3.event.stopPropagation();
 
                 showP = !showP;
 
                 toggleNodes(f, showP);
 
-                function f(e){
+                function f(e){ //filter
                     return e.id.substring(0, 1).toLowerCase() === 'p';
                 }
             }
         }
 
-        function isEdgeInNodelist(edge, nodes){
-            return nodes.filter(node => node.id === edge.source.id || node.id === edge.target.id).length;
+        function isEdgeInNodes(subjectEdge, nodes){
+            const isNodeInSubjectEdge = isNodeInEdge.bind(null, subjectEdge);
+            return nodes.filter(isNodeInSubjectEdge).length;
         }
 
-        function isNodeInNodelist(subjectNode, nodes){
-            return nodes.filter(node => node.id === subjectNode.id).length;
+        function isNodeInEdge(edge, node) {
+            return edge.source === node || node === edge.target;
         }
 
-        function isEdgeInEdgeList(subjectEdge, edges){
-            return edges.filter(edge =>
-                edge.source.id === subjectEdge.source.id && edge.target.id === subjectEdge.target.id
-            ).length;
+        function isNodeInNodes(subjectNode, nodes){
+            return nodes.filter(node => node === subjectNode).length;
+        }
+
+        function isEdgeInEdges(subjectEdge, edges){
+            return edges.filter(edge => edge === subjectEdge).length;
         }
 
         function toggleNodes(filterFunction, showNodes){
             //get nodes and edges from the master
             const nodesToToggle = graphMaster.nodes.filter(filterFunction);
             const edgesToToggle = graphMaster.edges.filter(edge =>
-                showNodes ? isEdgeInNodelist(edge, nodesToToggle) : !isEdgeInNodelist(edge, nodesToToggle));
+                showNodes ? isEdgeInNodes(edge, nodesToToggle) : !isEdgeInNodes(edge, nodesToToggle));
 
             //add/remove items-to-toggle to the current selection
             if (showNodes){
@@ -673,25 +667,23 @@
                 graphCurrentSelection.edges = graphCurrentSelection.edges.concat(edgesToToggle);
             } else {
                 graphCurrentSelection.nodes =
-                    graphCurrentSelection.nodes.filter(node => !isNodeInNodelist(node, nodesToToggle));
+                    graphCurrentSelection.nodes.filter(node => !isNodeInNodes(node, nodesToToggle));
 
                 graphCurrentSelection.edges =
-                    graphCurrentSelection.edges.filter(edge => isEdgeInEdgeList(edge, edgesToToggle));
+                    graphCurrentSelection.edges.filter(edge => isEdgeInEdges(edge, edgesToToggle));
             }
-
-            /* rebuild list */
-            linkedNodes = getNodesLinkedByEdges2(graphCurrentSelection.edges);
-            log('***linked nodes***\n', linkedNodes);
 
             redraw(graphCurrentSelection.nodes, graphCurrentSelection.edges);
 
             //Restart force simulation after transitions have completed
             restartSimulation(graphCurrentSelection.nodes, graphCurrentSelection.edges, timings.nodeExit);
+
+            flagReachableNodes();
         }
 
         function redraw(newNodes, newEdges){
-            //Update edges
-            edges = edges.data(newEdges, edge => edge.id);
+            /* EDGES */
+            edges = edges.data(newEdges, getEdgeIndexFromMaster);
 
             edges.exit()
                 .transition()
@@ -703,16 +695,14 @@
                 .style("pointer-events", "none")
                 .attrs({
                     'class': 'edge',
-                    'id': edge => 'edge' + edge.id
+                    'id': edge => 'edge' + getEdgeIndexFromMaster(edge)
                 })
                 .merge(edges);
 
             updateEdgeArrowheads();
 
-            log('REDRAW() EDGES:\n', edges);
-
-            //Update edge labels
-            edgeLabels = edgeLabels.data(newEdges, edge => edge.source.id);
+            /* EDGE LABELS */
+            edgeLabels = edgeLabels.data(newEdges, getEdgeIndexFromMaster);
 
             edgeLabels.exit()
                 .transition()
@@ -722,23 +712,19 @@
             edgeLabels = edgeLabels.enter()
                 .append("text")
                 .style("pointer-events", "none")
-                .attrs({
-//                    'class': 'edgelabel',
-//                    'id': (d,i) => 'edgelabel' + i
-                })
                 .append('textPath')
                 .style("pointer-events", "none")
                 .attrs({
                     "class": "edgelabel",
-                    "id": edge => classnames.edgeLabel + edge.id,
-                    "xlink:href": (d, i) => '#edge' + i,
+                    "id": edge => classnames.edgeLabel + getEdgeIndexFromMaster(edge),
+                    "xlink:href": edge => '#edge' + getEdgeIndexFromMaster(edge),
                     "startOffset": "50%"
                 })
-                .text(d => d.label)
+                .text(edge => edge.label)
                 .merge(edgeLabels);
 
-            //Update nodes
-            nodes = nodes.data(newNodes, node => node.id);
+            /* NODES */
+            nodes = nodes.data(newNodes, getNodeIndexFromMaster);
 
             nodes.exit()
                 .transition()
@@ -751,7 +737,8 @@
                 .attrs({
                     "class": classnames.node,
                     "r": '1',
-                    "id": node => classnames.node + node.id
+                    //"id": node => classnames.node + node.id
+                    "id": node => classnames.node + getNodeIndexFromMaster(node)
                 })
                 .on('contextmenu', handleRightClick)
                 .on("mouseover", handleMouseOver)
@@ -769,8 +756,8 @@
                 .ease(d3.easeBounce)
                 .attr('r', NODE_RADIUS);
 
-            //Update node labels
-            nodeLabels = nodeLabels.data(newNodes, node => node.id);
+            /* NODE LABELS */
+            nodeLabels = nodeLabels.data(newNodes, getNodeIndexFromMaster);
 
             nodeLabels.exit()
                 .remove();
@@ -782,9 +769,15 @@
                     "dy": ".35em"
                 })
                 .text(nodeLabel => nodeLabel.id)
-                .merge(nodeLabels)
+                .merge(nodeLabels);
+        }
 
-            //nodeLabels.text(nodeLabel => nodeLabel.id);
+        function getNodeIndexFromMaster(node){
+            return graphMaster.nodes.indexOf(node);
+        }
+
+        function getEdgeIndexFromMaster(edge){
+            return graphMaster.edges.indexOf(edge);
         }
 
         function restartSimulation(newNodes, newEdges, delay) {
