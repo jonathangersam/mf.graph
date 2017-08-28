@@ -455,6 +455,10 @@
             updateEdgeArrowheads();
         }
 
+        let compose = fs => x => fs.reduceRight((a, f) => f(a), x);
+
+        let invert = b => !b;
+
         function unfocusNonNeighborsOf(subjectNode) {
             const isUnconnectedToSubjectNode = node => !areNodesConnected(subjectNode, node);
 
@@ -462,14 +466,19 @@
             nodeLabels.classed(classnames.unfocused, isUnconnectedToSubjectNode);
 
             //TODO: next
-            //const isSubjectNodeInEdge = edge => isNodeInEdge(edge, subjectNode);
+            const isSubjectNodeInEdge = edge => isNodeInEdge(edge, subjectNode);
+            const isSubjectNodeNotInEdge = compose([invert, isSubjectNodeInEdge]);
+            edges.classed(classnames.unfocused, isSubjectNodeNotInEdge);
 
-            edges.classed(classnames.unfocused, edge =>
-                !(edge.source === subjectNode || subjectNode === edge.target)
-            );
-            edgeLabels.classed(classnames.unfocused, edgeLabel =>
-                !(edgeLabel.source === subjectNode || subjectNode === edgeLabel.target)
-            );
+//            edges.classed(classnames.unfocused, edge =>
+//                !(edge.source === subjectNode || subjectNode === edge.target)
+//            );
+
+            edgeLabels.classed(classnames.unfocused, isSubjectNodeNotInEdge);
+
+//            edgeLabels.classed(classnames.unfocused, edgeLabel =>
+//                !(edgeLabel.source === subjectNode || subjectNode === edgeLabel.target)
+//            );
 
             updateEdgeArrowheads();
         }
