@@ -1,0 +1,275 @@
+Principles of FP
+--------------------
+- Immutable
+- Composition
+
+
+
+Statements vs Expressions
+----------------------------
+- Expressions can be reduced
+
+
+Higher-Order Functions
+--------------------------
+
+
+Predicates
+--------------
+They are simply functions containing conditionals (ie if-then-else)
+
+
+From For-Loops to FP
+------------------------------------------------------
+##what each means
+1. filter()  : subset
+2. map()     : transform
+3. reduce()  : aggretate
+4. forEach() : side effect. use rarely. mostly for console.log()
+
+##Use appropriately
+
+
+
+
+
+
+Arrow Functions
+-------------------
+(An alternative syntax to standard function declaration)
+
+##Standard
+let f = function(x) {
+            return x * 10
+          }
+
+    f                         //returns "function(x) {return x * 10}".
+    f(3)                      //applies "function(3) {return 3 * 10}", reduces to "3 * 10", reduces to "30".
+
+##FP
+let f = x => x * 10           //returns "x => x * 10"
+    f(3)                      //applies "3 => 3 * 10", reduces to "3 * 10", reduces to "30".
+
+
+##
+
+##Arrow functions with manual return
+let f = x => x * 10           //returns "x => x * 10"
+    f                         //returns "x => x * 10"
+    f(3)                      //applies "3 => 3 * 10", reduces to "3 * 10", reduces to "30".
+
+vs
+
+let f = x => {x * 10}         //returns "x => {x * 10}"
+    f                         //returns "x => {x * 10}"
+    f(3)                      //applies "3 => {3 * 10}", reduces to "{3 * 10}", == "{30}", reduces to "undefined".
+
+vs
+
+let f = x => {return x * 10}  //returns "x => {return x * 10}"
+    f                         //returns "x => {return x * 10}"
+    f(3)                      //applies "3 => {return 3 * 10}", reduces to "{return 3 * 10}", reduces to "{return 30}", reduces to "30".
+
+
+##Anonymous Functions (aka Lambdas)
+(Arrow functions make it convenient to declare anonymous functions)
+
+
+Currying
+---------------------
+Shuffling Cards
+
+##Currying simplified
+
+###Standard
+let f = function(x) {
+            return x * 10
+        }
+
+    f                //returns "function(x) {return x * 10}".
+    f(3)             //applies "function(3) {return 3 * 10}", reduces to "3 * 10", reduces to "30".
+
+###FP
+let f = x => x * 10  //returns "x => x * 10"
+    f                //returns "x => x * 10"
+    f(3)             //applies "3 => 3 * 10", reduces to "3 * 10", reduces to "30".
+
+
+##Currying and partial application
+
+###Standard
+let f = function(x, y) {
+            return x * y
+        }
+
+    f                   //returns "function(x, y) {return x * y}"
+    f(2, 3)             //applies "function(2, 3) {return 2 * 3}", reduces to "return 2 * 3", reduces to "6"
+
+###FP
+let f = x => y => x * y //returns "x => y => x * y"
+    f                   //returns "x => y => x * y"
+    f(2)(3)             //applies "2 => 3 => 2 * 3", reduces to "2 * 3", reduces to "6"
+
+let fx = f(2)           //returns "y => x * y", reduces to "y => 2 * y"
+    fx                  //returns "y => x * y", reduces to "y => 2 * y"
+    fx(3)               //applies "3 => 2 * 3", reduces to "2 * 3", reduces to "6"
+
+let fxy = fx(3)         //applies "3 => 2 * 3", reduces to "2 * 3", reduces to "6"
+    fxy                 //returns "6"
+
+
+##Abstractions you can make using Currying
+let multiplyTwoNumbers   = x => y => x * y
+let double               = multiplyTwoNumbers(2)
+let triple               = multiplyTwoNumbers(3)
+
+
+let filter                 = f => list = list.filter(f)
+let isEven                 = x => x % 2 === 0
+let isOdd                  = x => x % 2 !== 0
+let getEvenNumbers         = filter(isEven)
+let getOddNumbers          = filter(isEven)
+let myData                 = [0, 1, 2, 3, 4, 5]
+    getEvenNumbers(myData)                               //returns [0, 2, 4]
+    getOddNumbers(myData)                                //returns [1, 3, 5]
+
+##Alternative 'standards', from most readable to least readable
+
+###FP
+(easiet to read)
+
+getEvenNumbers(myData)
+
+###Array.filter with named functions
+(more to nouns and verbs to juggle than FP, but still ok)
+
+isEven = ...
+myData.filter(isEven)
+
+###Array.filter with anonymous functions
+(you missed the chance for reuseability)
+
+myData.filter(d => d % 2 === 0)
+
+###Array.forEach
+(lower intent signal. will produce side-effects)
+
+let result = []
+myData.forEach(d => {if (d % 2 === 0) result.push(d)})
+
+###For loops
+(ewwww)
+
+let result = []
+for (let i = 0; i < myData.length; i++) {
+    if (myData[i] % 2 === 0) {
+        result.push(myData[i])
+    }
+}
+
+
+
+A Note On Repetiion
+----------------------
+- I'm aware, I could shorten it, but its the basis of pattern matching
+- Seeing the patterns will develop your intuition (aka code smell)
+- Then when you see sub-optimal code, you will be very, very annoyed.
+- I try to use the terms FP paradigm practitioners would use, so When you go online, the terms will be familiar
+- "When the bullets start flying"
+
+
+
+
+Composition
+-----------------------
+Chains
+
+##A Note on Naming convention
+variables set 1 : x,y,z
+variables set 2 : a,b,c
+functions       : f,g,h
+
+##Important pattern: functions before data. this will support currying
+
+##
+function myFunc(f, g, x){
+    f(g(x))
+}
+
+##first, we setup reuseable functions we can compose later
+let triple = x => x * 3                               //returns "x => x * 3"
+let addOne = x => x + 1                               //returns "x => x + 1"
+
+##Simple, 2-step (right-to-left)
+let compose  = f => g => x => f(g(x))                 //returns    "f => g => x => f(g(x))"
+let sequence = compose(triple, addOne)                //returns    "x => f(g(x))",           //just remember: f=triple, g=addOne
+                                                      //reduces to "x => f(x + 1)",          //g applied to x
+                                                      //reduces to "x => (x + 1) * 3"        //f applied to (g applied to x)
+
+    sequence(2)                                       //applies "2 => (2 + 1) * 3", reduces to "(3) * 3", reduces to "9"
+    sequence(5)                                       //applies "5 => (5 + 1) * 3", reduces to "(6) * 3", reduces to "18"
+    sequence(7)                                       //applies "7 => (7 + 1) * 3", reduces to "(8) * 3", reduces to "24"
+
+##Complex - Any number of steps
+###first, remember Array.reduce() - means aggretation.
+let myData = [2, 3]                     //returns "[2, 3]"
+    myData.reduce((a, x) => a + x, 0)   //reduces to "(0 + 2) + 3", reduces to "(2) + 3", reduces to "5"
+
+###N-step (left-to-right)
+let compose      = fs => x => fs.reduce((a, f) => f(a), x) //returns "x => fs.reduce((a, f) => f(a), x)"
+let sequenceA    = compose([triple, addOne])                 //returns "x => fs.reduce((a, f) => f(a), x)", reduces to "f(x)"
+
+###N-step (right-to-left, more traditional)
+let composeRight = fs => x => fs.reduceRight((a, f) => f(a), x)
+let sequenceB    = compose([addOne, triple])                 //
+
+##Important! Left-to-Right / Right-to-Left sequence matters!
+let sequenceA = compose([triple, addOne])
+let sequenceB = composeRight([triple, addOne])
+    sequenceA(3)                                           //returns 10
+    sequenceB(3)                                           //returns 12
+
+
+Currying Traditional Functions using Bind()
+------------------------------------------------
+so from last time's composition work,
+you now have the ability to compose any number of functions together
+
+compose([addOne, triple, addOne])
+
+what's that you say? still unhappy about the [brackets]?
+psh... okay I have one more lifehack for you. let's get rid of the [brackets]
+
+
+
+
+
+
+
+
+
+Refactoring to FP
+---------------------
+##Code Smells
+- duplicate code
+- anonymous functions
+- suboptimal parameter order: should be functions first, data last
+- mutation/side effects
+
+##how to
+- remove all FOR LOOPS
+- refactor anonymous functions into named functions
+- 
+
+##hints at the right direction
+- small functions. some are 1 liners
+- more readable, semantic, verbose
+- pure, no-mutations
+- if mutations/states are needed, state is in a traditional "parent" function, calling pure functions
+
+
+
+
+From FP to PF
+----------------------
+Intro to Point-Free programming style
