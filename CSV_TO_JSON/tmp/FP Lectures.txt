@@ -1,7 +1,10 @@
 Principles of FP
 --------------------
+visual clutter is mental clutter
+
 - Immutable
 - Composition
+
 
 
 
@@ -14,12 +17,8 @@ Higher-Order Functions
 --------------------------
 
 
-Predicates
---------------
-They are simply functions containing conditionals (ie if-then-else)
 
-
-From For-Loops to FP
+From For-Loops to FP Loops
 ------------------------------------------------------
 ##what each means
 1. filter()  : subset
@@ -30,6 +29,11 @@ From For-Loops to FP
 ##Use appropriately
 
 
+
+Predicates
+--------------
+Extract your conditionals into its own function
+They are simply functions containing conditionals (ie if-then-else)
 
 
 
@@ -75,8 +79,8 @@ let f = x => {return x * 10}  //returns "x => {return x * 10}"
 (Arrow functions make it convenient to declare anonymous functions)
 
 
-Currying
----------------------
+Currying (or more importantly, Partial Application)
+--------------------------------------------------------
 Shuffling Cards
 
 ##Currying simplified
@@ -169,6 +173,13 @@ for (let i = 0; i < myData.length; i++) {
 
 
 
+Practical Partial Application: the Bind() functions
+-------------------------------------------------------
+so from last time's composition work,
+you now have the ability to compose any number of functions together
+
+
+
 A Note On Repetiion
 ----------------------
 - I'm aware, I could shorten it, but its the basis of pattern matching
@@ -230,17 +241,20 @@ let sequenceB = composeRight([triple, addOne])
     sequenceB(3)                                           //returns 12
 
 
-Currying Traditional Functions using Bind()
-------------------------------------------------
-so from last time's composition work,
-you now have the ability to compose any number of functions together
 
-compose([addOne, triple, addOne])
 
+
+
+
+
+
+Array.prototype.slice.call()
+----------------------------------
 what's that you say? still unhappy about the [brackets]?
 psh... okay I have one more lifehack for you. let's get rid of the [brackets]
 
 
+compose([addOne, triple, addOne])
 
 
 
@@ -273,3 +287,9 @@ Refactoring to FP
 From FP to PF
 ----------------------
 Intro to Point-Free programming style
+
+Workflow
+- do the simplest thing
+- get angry
+- keep calm, find the code smells and refactor
+- code all over agian
