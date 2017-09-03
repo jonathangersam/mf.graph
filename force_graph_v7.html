@@ -159,6 +159,8 @@
     //MAIN
     /*
     TODO
+    - make FP reject()
+    - separate FP tools into fpj package
     - Make global state variable
     - make sample button for toggling ie prefix=p
     - add checkboxes on jumbotron for toggling
@@ -227,6 +229,8 @@
         const and = b1 => b2 => b1 && b2;
         const invert = b => !b;
         const filter = predicate => list => list.filter(predicate);
+        const reject = predicate => list => list.filter(x => !predicate(x));
+
         const map = f => list => list.map(f);
         const each = f => list => list.each(f);
         const d3map = f => list => { //special. for D3 selection each
@@ -323,24 +327,6 @@
             }
         }
 
-        function fixEdgesConnectedTo(subjectNode) {
-            const isSubjectFixed = isNodeClassed(graphMaster)(classnames.fixed)(subjectNode);
-            const fixedSubjectNodeAndNode = propAccessor =>
-                compose(and(isSubjectFixed),
-                    isNodeClassed(graphMaster)(classnames.fixed),
-                    propAccessor);
-
-            const toggleFixedClassBy = accessNodeA => accessNodeB =>
-                toggleClassOfD3Element(classnames.fixed)(x => subjectNode === accessNodeA(x))(fixedSubjectNodeAndNode(accessNodeB));
-
-            toggleFixedClassBy(getSource)(getTarget)(edges);
-            toggleFixedClassBy(getTarget)(getSource)(edges);
-
-            toggleFixedClassBy(getSource)(getTarget)(edgeLabels);
-            toggleFixedClassBy(getTarget)(getSource)(edgeLabels);
-
-            updateEdgeArrowheads();
-        }
 
         //Mouse interaction functions
         function dragstarted(d) {
@@ -414,6 +400,33 @@
             unfocusNonNeighborsOf(d);
         }
 
+        //aa2
+        function fixEdgesConnectedTo(subjectNode) {
+            const isSubjectFixed = isNodeClassed(graphMaster)(classnames.fixed)(subjectNode);
+            const fixedSubjectNodeAndNode = propAccessor =>
+                compose(and(isSubjectFixed),
+                    isNodeClassed(graphMaster)(classnames.fixed),
+                    propAccessor);
+
+            const toggleFixedClassBy = accessNodeA => accessNodeB =>
+                toggleClassOfD3Element(classnames.fixed)(x => subjectNode === accessNodeA(x))(fixedSubjectNodeAndNode(accessNodeB));
+
+            toggleFixedClassBy(getSource)(getTarget)(edges);
+            toggleFixedClassBy(getTarget)(getSource)(edges);
+
+            toggleFixedClassBy(getSource)(getTarget)(edgeLabels);
+            toggleFixedClassBy(getTarget)(getSource)(edgeLabels);
+
+            updateEdgeArrowheads();
+        }
+
+        const d3get = p => list => { //special. for D3 selection each
+            let results = [];
+            list.each(x => results.push(x[p]));
+            return results;
+        };
+
+
         function flagReachableNodes() {
             nodes.classed(classnames.reachable, false);
             const fixedNode = propAccessor => compose(isNodeClassed(graphMaster)(classnames.fixed), propAccessor);
@@ -422,11 +435,13 @@
             const applyReachableClassToOppositeOfFixedNode = filterAccessor => mappingAccessor => x =>
                 x.filter(fixedNode(filterAccessor)).each(applyReachableClassToNode(mappingAccessor));
 
-            //aa1
+            //aa1 TODO: selectNodes (plural)
 //            const f = compose(
-//                map (compose(applyClass(classnames.reachable)(true), flog('selected node'),  selectNode, flog('id of node to select'), getProp ('id'))),
-//                d3map (getProp('target')),
-//                filter (edge => isNodeFixed(edge.source)));
+//                //map (compose(applyClass(classnames.reachable)(true), flog('selected node'),  selectNode),
+//                flog ('id of node to select'),
+//                d3get ('id'),
+//                d3get ('target'),
+//                filter (edge => isNodeClassed(graphCurrentSelection)(classnames.fixed)(edge.source)));
 //            f(edges);
 
             applyReachableClassToOppositeOfFixedNode(getSource)(getTarget)(edges);
@@ -457,7 +472,7 @@
             const unfocusNodesNotConnectedToSubjectNode =
                 compose(
                     applyClass (classnames.unfocused) (true),
-                    filter(compose(invert, connectedNodes (graphCurrentSelection) (subjectNode)))
+                    reject(connectedNodes (graphCurrentSelection) (subjectNode))
                 );
 
             unfocusNodesNotConnectedToSubjectNode(nodes);
@@ -466,7 +481,7 @@
             const unfocusEdgesNotConnectedToSubjectNode =
                 compose(
                     applyClass (classnames.unfocused) (true),
-                    filter(compose(invert, edgeInNode (subjectNode) ))
+                    reject(edgeInNode(subjectNode))
                 );
 
             unfocusEdgesNotConnectedToSubjectNode(edges);
@@ -476,8 +491,6 @@
         }
 
         function removeFocused() {
-            const removeFocusedClass = applyClass(classnames.focused)(false);
-
             removeFocusedClass(nodes);
             removeFocusedClass(nodeLabels);
             removeFocusedClass(edges);
@@ -487,8 +500,6 @@
         }
 
         function removeUnfocused() {
-            const removeFixedClass = applyClass(classnames.unfocused)(false);
-
             removeFixedClass(nodes);
             removeFixedClass(nodeLabels);
             removeFixedClass(edges);
@@ -501,8 +512,6 @@
             if (!SHOW_EDGE_ARROWHEADS) {
                 return;
             }
-
-            const createArrowhead = curry2(createArrowheadMarker)(classnames.arrowhead);
 
             createArrowhead(ids.arrowheadNeutral);
             createArrowhead(ids.arrowheadFocused);
@@ -778,6 +787,11 @@
 
         const selectNode = node => d3.select("#node" + getNodeIndexFromMaster(node));
         const formatMarkerUrl = id => 'url(#' + id + ')';
+
+        const createArrowhead = curry2(createArrowheadMarker)(classnames.arrowhead);
+        const removeFocusedClass = applyClass(classnames.focused)(false);
+        const removeFixedClass = applyClass(classnames.unfocused)(false);
+
 
         /* API */
         return { //interface
