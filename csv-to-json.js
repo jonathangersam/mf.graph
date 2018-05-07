@@ -1,18 +1,6 @@
-//const INPUT_PATH = "./tmp/regional.csv";
-//const OUTPUT_PATH = "./tmp/regional.json";
-const INPUT_PATH = "./tmp/tzsr.csv";
-const OUTPUT_PATH = "./tmp/tzsr.json";
+// const INPUT_PATH = "./tmp/tzsr.csv";
+// const OUTPUT_PATH = "./tmp/tzsr.json";
 
-
-/* BOOTSTRAP */
-getJsonFromCsv(INPUT_PATH, function(d) {
-    console.log(d);
-
-    const graph = getGraphFromArray(d);
-    console.log(graph);
-
-    require('fs').writeFileSync(OUTPUT_PATH, JSON.stringify(graph));
-});
 
 /* FP Functions */
 function getJsonFromCsv(path, callback){
@@ -51,3 +39,22 @@ function getGraphFromArray(arr) {
     }
 }
 
+
+const INPUT_PATH = process.argv[2]
+
+if (!INPUT_PATH) {
+    console.log('missing reqquired arg. Expected format is <node csv-to-json.js inputpath [outputpath]>')
+    process.exit(1)
+}
+
+const OUTPUT_PATH = process.argv[3] || process.argv[2] + '.json'
+
+/* MAIN */
+getJsonFromCsv(INPUT_PATH, function(d) {
+    console.log(d);
+
+    const graph = getGraphFromArray(d);
+    console.log(graph);
+
+    require('fs').writeFileSync(OUTPUT_PATH, JSON.stringify(graph, null, '\t'));
+});
