@@ -1,0 +1,9 @@
+source,label,target
+Dog,Is a,Person
+Dog,Is the breed of,Scrappy
+Scrappy,Is a good,Dog
+Jon,pets,Scrappy
+Patty,Is Besties With,Scrappy
+Greta,Is Noona of,Patty
+Jon,Kicks,Patty
+Jon,loves,Greta
